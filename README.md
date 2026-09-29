@@ -16,8 +16,25 @@ ads/
   naffy/
   babelboost/
 templates/
+tools/
+  video-downloader/
 archive/
 ```
+
+## Narzędzia
+
+### Babel Boost Video Downloader
+
+Lokalne narzędzie Streamlit do pobierania własnych lub dozwolonych materiałów z YouTube, X/Twitter i Facebooka.
+
+Obsługuje:
+
+- MP4
+- 1080p, 720p i 480p
+- MP3
+- cookies lokalnej przeglądarki dla treści, do których użytkownik ma legalny dostęp
+
+Kod i instrukcja: `tools/video-downloader/`
 
 ## Zasada pracy
 
@@ -50,4 +67,4 @@ Przykład:
 2026-09-oszustwa-50plus-01.md
 ```
 
-Nie przechowuj tu haseł, tokenów API ani danych logowania.
+Nie przechowuj tu haseł, tokenów API, plików cookies ani danych logowania.

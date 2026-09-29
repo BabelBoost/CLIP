@@ -1,16 +1,25 @@
-# Babel Boost Video Downloader
+# Babel Boost Video Downloader 2.0
 
-Lokalne narzędzie do pobierania materiałów z:
+Lokalna aplikacja do pracy z dozwolonymi materiałami z YouTube, X/Twitter i Facebooka.
 
-- YouTube
-- X / Twitter
-- Facebook
+## Funkcje 2.0
 
-Obsługuje MP4, wybór jakości oraz MP3.
+- wiele linków w jednej kolejce
+- podgląd tytułu, autora, długości i miniatury przed pobraniem
+- pasek postępu całej kolejki
+- MP4 w najlepszej jakości, 1080p, 720p albo 480p
+- MP3 192 kb/s
+- opcjonalne napisy, w tym napisy automatyczne, jeżeli źródło je udostępnia
+- wybór języków napisów, np. `pl,en,is`
+- zapis miniatury jako osobnego pliku
+- wersja TikTok 9:16 w 1080×1920
+- pionowe wideo z rozmytym tłem i pełnym oryginalnym kadrem na środku
+- cookies z Chrome, Edge lub Firefox dla treści, do których użytkownik ma legalny dostęp
+- automatyczne testy GitHub Actions
 
 ## Ważne
 
-Używaj narzędzia wyłącznie do materiałów, które należą do Ciebie, są udostępnione do pobrania albo masz zgodę na ich zapis. Aplikacja nie omija DRM ani zabezpieczeń prywatnych treści.
+Używaj aplikacji wyłącznie do materiałów, które należą do Ciebie, są udostępnione do pobrania albo masz zgodę na ich zapis. Aplikacja nie omija DRM ani zabezpieczeń prywatnych treści.
 
 ## Windows
 
@@ -35,7 +44,7 @@ Najprościej przez Winget:
 winget install Gyan.FFmpeg
 ```
 
-Potem otwórz nowy terminal i sprawdź:
+Następnie otwórz nowy terminal i sprawdź:
 
 ```powershell
 ffmpeg -version
@@ -48,15 +57,37 @@ chmod +x run_linux_mac.sh
 ./run_linux_mac.sh
 ```
 
-Na macOS FFmpeg można zainstalować przez Homebrew:
+Na macOS:
 
 ```bash
 brew install ffmpeg
 ```
 
+## Jak używać kolejki
+
+Wklej kilka linków do pola tekstowego. Każdy może być w osobnym wierszu. Aplikacja usuwa duplikaty i pomija nieobsługiwane domeny.
+
+Najpierw możesz kliknąć `Sprawdź linki`. Zobaczysz tytuł, miniaturę, autora i długość materiału. Potem ustaw format, jakość, napisy, miniaturę i opcję TikTok 9:16. Kliknij `Pobierz kolejkę`.
+
+## TikTok 9:16
+
+Opcja `Przygotuj TikTok 9:16` tworzy dodatkowy plik MP4 1080×1920. Oryginalny obraz nie jest agresywnie przycinany. Film jest skalowany do środka pionowego kadru, a puste miejsce wypełnia rozmyte tło z tego samego materiału.
+
+Ten tryb wymaga FFmpeg.
+
+## Napisy
+
+Po zaznaczeniu `Pobierz napisy` aplikacja próbuje pobrać napisy zwykłe oraz automatyczne. Języki podaje się jako kody oddzielone przecinkami, np.:
+
+```text
+pl,en,is
+```
+
+Dostępność zależy od źródła.
+
 ## Treści wymagające logowania
 
-W aplikacji możesz wybrać Chrome, Edge lub Firefox. `yt-dlp` spróbuje użyć cookies z lokalnej przeglądarki. Korzystaj z tej opcji wyłącznie dla treści, do których masz legalny dostęp.
+W aplikacji możesz wybrać Chrome, Edge lub Firefox. `yt-dlp` spróbuje użyć cookies z lokalnej przeglądarki. Nie zapisuj cookies w repozytorium.
 
 ## Struktura modułu
 
@@ -65,9 +96,11 @@ video-downloader/
 ├── app.py
 ├── downloader/
 │   ├── __init__.py
-│   └── core.py
+│   ├── core.py
+│   └── media.py
 ├── tests/
-│   └── test_core.py
+│   ├── test_core.py
+│   └── test_media.py
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── run_windows.bat
@@ -76,18 +109,18 @@ video-downloader/
 └── .gitignore
 ```
 
-`app.py` odpowiada za interfejs Streamlit. `downloader/core.py` zawiera logikę, którą później można wykorzystać również w wersji desktopowej albo CLI.
+`app.py` obsługuje interfejs i kolejkę. `downloader/core.py` odpowiada za linki, opcje yt-dlp, napisy, miniatury i pliki wynikowe. `downloader/media.py` przygotowuje pionowe wideo przez FFmpeg.
 
 ## Testy
 
 ```bash
 python -m pip install -r requirements-dev.txt
-pytest -q
+python -m pytest -q
 ```
 
 ## Aktualizacja yt-dlp
 
-Serwisy często zmieniają sposób publikacji wideo. Jeśli pobieranie przestanie działać:
+YouTube, X i Facebook zmieniają sposób publikacji wideo. Gdy pobieranie przestanie działać, najpierw zaktualizuj yt-dlp:
 
 ```bash
 python -m pip install -U yt-dlp

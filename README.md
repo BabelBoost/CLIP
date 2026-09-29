@@ -23,7 +23,7 @@ archive/
 
 ## Narzędzia
 
-### Babel Boost Video Downloader 3.1
+### Babel Boost Video Downloader 3.2 — Smart Viral Clips
 
 Lokalne narzędzie Streamlit do pracy z własnymi lub dozwolonymi materiałami z YouTube, X/Twitter i Facebooka.
 
@@ -31,22 +31,22 @@ Obsługuje:
 
 - kolejkę wielu linków
 - MP4 i MP3
-- podgląd tytułu, autora, długości i miniatury
-- Smart Clips 3.1
-- wykrywanie twarzy przez OpenCV
-- analizę ruchu i zmian scen
+- wykrywanie twarzy, ruchu i zmian scen
 - analizę mowy i ciszy
-- ranking krótkich fragmentów z preferencją dla mowy
 - lokalną transkrypcję Faster-Whisper
-- automatyczne pliki SRT
-- opcjonalne wypalanie napisów w pionowym klipie
+- automatyczne napisy SRT i wypalanie napisów w MP4
+- Smart Viral Clips 3.2
+- większą pulę kandydatów na klipy
+- analizę hooka, pytań, liczb, kontrastu i tempa mowy
+- ranking `Viral Potential 0–100`
+- krótkie wyjaśnienie, dlaczego fragment dostał wysoki wynik
 - podgląd propozycji przed renderowaniem
-- ręczny wybór klipów do renderowania
-- inteligentne kadrowanie 9:16 w stronę twarzy
-- generowanie gotowych MP4 1080×1920
-- raport JSON z wynikami analizy
-- cookies lokalnej przeglądarki dla treści, do których użytkownik ma legalny dostęp
+- ręczny wybór klipów
+- inteligentne kadrowanie 9:16
+- generowanie MP4 1080×1920
 - testy GitHub Actions
+
+`Viral Potential` jest wskaźnikiem heurystycznym, a nie gwarancją popularności lub zasięgu.
 
 Kod i instrukcja: `tools/video-downloader/`
 
@@ -56,7 +56,6 @@ Każdy klip powinien mieć:
 
 - hook na pierwsze sekundy
 - scenariusz
-- prompt do generatora wideo
 - tekst na ekranie
 - CTA
 - opis

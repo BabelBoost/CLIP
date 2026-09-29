@@ -23,7 +23,7 @@ archive/
 
 ## Narzędzia
 
-### Babel Boost Video Downloader 2.0
+### Babel Boost Video Downloader 3.0
 
 Lokalne narzędzie Streamlit do pracy z własnymi lub dozwolonymi materiałami z YouTube, X/Twitter i Facebooka.
 
@@ -36,8 +36,14 @@ Obsługuje:
 - napisy zwykłe i automatyczne
 - wybór języków napisów
 - pobieranie miniatur
-- pasek postępu kolejki
-- automatyczne przygotowanie dodatkowego MP4 1080×1920 pod TikTok 9:16
+- pełne wideo TikTok 9:16 z rozmytym tłem
+- Smart Clips 3.0
+- wykrywanie twarzy przez OpenCV
+- analizę ruchu i zmian scen
+- automatyczne propozycje krótkich fragmentów
+- inteligentne kadrowanie 9:16 w stronę twarzy
+- generowanie 1–5 gotowych klipów 1080×1920
+- raport JSON z wynikami analizy
 - cookies lokalnej przeglądarki dla treści, do których użytkownik ma legalny dostęp
 - testy GitHub Actions
 

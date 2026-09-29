@@ -12,6 +12,17 @@ from .core import (
     parse_urls,
 )
 from .media import build_tiktok_filter, prepare_tiktok_9x16, tiktok_output_path
+from .smartclip import (
+    CandidateClip,
+    analyze_video_for_clips,
+    build_smart_clip_command,
+    build_smart_crop_filter,
+    render_smart_clip,
+    select_non_overlapping,
+    smart_clip_output_path,
+    suggest_clips,
+    write_analysis_report,
+)
 
 __all__ = [
     "QUALITY_FORMATS",
@@ -28,4 +39,13 @@ __all__ = [
     "build_tiktok_filter",
     "prepare_tiktok_9x16",
     "tiktok_output_path",
+    "CandidateClip",
+    "analyze_video_for_clips",
+    "build_smart_clip_command",
+    "build_smart_crop_filter",
+    "render_smart_clip",
+    "select_non_overlapping",
+    "smart_clip_output_path",
+    "suggest_clips",
+    "write_analysis_report",
 ]

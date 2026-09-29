@@ -54,7 +54,7 @@ def test_mp3_options_include_ffmpeg_postprocessor(tmp_path):
     assert options["postprocessors"][0]["key"] == "FFmpegExtractAudio"
 
 
-def test_video_options_respect_quality(tmp_path):
+def test_video_options_respect_quality_and_prefer_m4a_audio(tmp_path):
     options = build_ydl_options(
         str(tmp_path),
         mode="Wideo MP4",
@@ -62,7 +62,22 @@ def test_video_options_respect_quality(tmp_path):
         browser="Bez logowania",
     )
     assert "height<=720" in options["format"]
+    assert "ba[ext=m4a]" in options["format"]
+    assert options["format"].startswith("bv[height<=720][ext=mp4]+ba[ext=m4a]")
     assert options["merge_output_format"] == "mp4"
+    assert options["audio_multistreams"] is False
+    assert options["video_multistreams"] is False
+
+
+def test_best_quality_video_also_prefers_mp4_plus_m4a(tmp_path):
+    options = build_ydl_options(
+        str(tmp_path),
+        mode="Wideo MP4",
+        quality="Najlepsza dostępna",
+        browser="Bez logowania",
+    )
+    assert options["format"].startswith("bv[ext=mp4]+ba[ext=m4a]")
+    assert "/bv+ba/" in options["format"]
 
 
 def test_subtitles_thumbnail_and_progress_hook_options(tmp_path):

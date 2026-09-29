@@ -2,3 +2,4 @@ streamlit
 yt-dlp
 opencv-python-headless>=4.10
 numpy>=1.26
+faster-whisper>=1.1.0

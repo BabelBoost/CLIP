@@ -1,31 +1,39 @@
 # Roadmap
 
-## v1.1
+## v2.0 — gotowe
 
 - kolejka wielu linków
-- pasek postępu pobierania
-- historia ostatnich zadań bez przechowywania haseł i cookies
-- wybór katalogu docelowego
+- pasek postępu całej kolejki
+- podgląd tytułu, autora, długości i miniatury
+- pobieranie miniatur
+- pobieranie napisów zwykłych i automatycznych
+- wybór języków napisów
+- wersja TikTok 9:16 w 1080×1920
+- rozmyte tło i zachowanie pełnego oryginalnego kadru
+- testy modułów oraz GitHub Actions
 
-## v1.2
+## v2.1
 
-- pobieranie napisów
-- wybór ścieżki audio
+- wybór katalogu docelowego w wersji desktopowej
+- kolejka z możliwością zatrzymania i wznowienia
+- eksport metadanych do JSON lub CSV
+- pakowanie plików pobocznych do ZIP
 - tryb audio M4A
-- lepsze komunikaty błędów dla YouTube, X i Facebooka
 
-## v1.3
+## v2.2
 
 - obsługa playlist po świadomym włączeniu tej opcji
-- eksport metadanych filmu do JSON lub CSV
-- miniatury i tytuły przed pobraniem
+- wybór dostępnej ścieżki audio
+- wybór konkretnych napisów na podstawie listy wykrytej w źródle
+- lokalna historia zadań bez haseł i cookies
 
-## v2.0
+## v3.0
 
-- osobny interfejs desktopowy
-- kolejka zadań działająca lokalnie
-- moduł przygotowania materiału pod TikTok 9:16
-- integracja z katalogiem `tiktok/` w repozytorium CLIP
+- osobna aplikacja desktopowa
+- inteligentne kadrowanie 9:16 z wykrywaniem twarzy lub głównego obiektu
+- automatyczne wycinanie krótkich fragmentów pod TikTok
+- opcjonalne napisy wypalone w wideo
+- integracja wyniku z katalogiem `tiktok/` repozytorium CLIP
 
 ## Zasady bezpieczeństwa
 

@@ -11,11 +11,34 @@ SUPPORTED_HOSTS = {
     "fb.watch", "www.fb.watch",
 }
 
+# Prefer MP4 video + M4A/AAC audio first. This combination is the most reliable
+# for playback on Windows and avoids MP4 files containing an audio codec that
+# some players treat as silent. If a source does not expose M4A, yt-dlp falls
+# back to the best separate video/audio pair and finally to a combined format.
 QUALITY_FORMATS = {
-    "Najlepsza dostępna": "bv*+ba/b",
-    "1080p": "bv*[height<=1080]+ba/b[height<=1080]/b",
-    "720p": "bv*[height<=720]+ba/b[height<=720]/b",
-    "480p": "bv*[height<=480]+ba/b[height<=480]/b",
+    "Najlepsza dostępna": (
+        "bv[ext=mp4]+ba[ext=m4a]/"
+        "bv+ba/"
+        "b[ext=mp4]/b"
+    ),
+    "1080p": (
+        "bv[height<=1080][ext=mp4]+ba[ext=m4a]/"
+        "bv[height<=1080]+ba/"
+        "b[height<=1080][ext=mp4]/"
+        "b[height<=1080]/b"
+    ),
+    "720p": (
+        "bv[height<=720][ext=mp4]+ba[ext=m4a]/"
+        "bv[height<=720]+ba/"
+        "b[height<=720][ext=mp4]/"
+        "b[height<=720]/b"
+    ),
+    "480p": (
+        "bv[height<=480][ext=mp4]+ba[ext=m4a]/"
+        "bv[height<=480]+ba/"
+        "b[height<=480][ext=mp4]/"
+        "b[height<=480]/b"
+    ),
 }
 
 MEDIA_EXTENSIONS = {
@@ -152,6 +175,8 @@ def build_ydl_options(
         opts.update({
             "format": QUALITY_FORMATS[quality],
             "merge_output_format": "mp4",
+            "audio_multistreams": False,
+            "video_multistreams": False,
         })
 
     return opts

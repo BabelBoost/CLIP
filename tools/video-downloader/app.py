@@ -8,6 +8,7 @@ import yt_dlp
 
 from downloader import (
     QUALITY_FORMATS,
+    analyze_video_for_clips,
     build_info_options,
     build_ydl_options,
     find_primary_media,
@@ -18,10 +19,12 @@ from downloader import (
     parse_subtitle_languages,
     parse_urls,
     prepare_tiktok_9x16,
+    render_smart_clip,
+    write_analysis_report,
 )
 
 st.set_page_config(
-    page_title="Babel Boost Video Downloader 2.0",
+    page_title="Babel Boost Video Downloader 3.0",
     page_icon="🎬",
     layout="wide",
 )
@@ -42,13 +45,20 @@ def guess_mime(path: Path) -> str:
         return "application/x-subrip"
     if suffix == ".vtt":
         return "text/vtt"
+    if suffix == ".json":
+        return "application/json"
     return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
 
 def file_kind(path: Path) -> str:
     suffix = path.suffix.lower()
-    if "_tiktok_9x16" in path.stem.lower():
-        return "TikTok 9:16"
+    stem = path.stem.lower()
+    if "_smartclip_" in stem:
+        return "Smart Clip 9:16"
+    if "_tiktok_9x16" in stem:
+        return "TikTok 9:16 pełne wideo"
+    if path.name == "smartclip_analysis.json":
+        return "Raport Smart Clips"
     if suffix in {".srt", ".vtt", ".ass", ".lrc"}:
         return "Napisy"
     if suffix in {".jpg", ".jpeg", ".png", ".webp", ".avif"}:
@@ -70,8 +80,11 @@ def clear_results():
     st.session_state.previews = []
 
 
-st.title("Babel Boost Video Downloader 2.0")
-st.caption("YouTube • X/Twitter • Facebook • kolejka • napisy • miniatury • TikTok 9:16")
+st.title("Babel Boost Video Downloader 3.0")
+st.caption(
+    "YouTube • X/Twitter • Facebook • kolejka • napisy • miniatury • "
+    "Smart Clips • wykrywanie twarzy • TikTok 9:16"
+)
 
 st.info(
     "Pobieraj tylko materiały, do których masz prawa lub zgodę. "
@@ -98,8 +111,8 @@ if valid_urls:
 if invalid_urls:
     st.warning("Pominięte nieobsługiwane linki:\n" + "\n".join(invalid_urls))
 
-settings_left, settings_mid, settings_right = st.columns(3)
-with settings_left:
+settings_a, settings_b, settings_c, settings_d = st.columns(4)
+with settings_a:
     mode = st.selectbox("Format", ["Wideo MP4", "MP3"])
     quality = st.selectbox(
         "Jakość",
@@ -107,7 +120,7 @@ with settings_left:
         disabled=(mode == "MP3"),
     )
 
-with settings_mid:
+with settings_b:
     download_thumbnail = st.checkbox("Pobierz miniaturę", value=True)
     download_subtitles = st.checkbox("Pobierz napisy", value=False)
     subtitle_languages_text = st.text_input(
@@ -117,24 +130,60 @@ with settings_mid:
         help="Kody języków oddzielone przecinkami, np. pl,en,is.",
     )
 
-with settings_right:
+with settings_c:
     make_tiktok = st.checkbox(
-        "Przygotuj TikTok 9:16",
+        "Pełne wideo TikTok 9:16",
         value=False,
         disabled=(mode == "MP3"),
-        help="Tworzy MP4 1080×1920 z rozmytym tłem i zachowaniem pełnego kadru.",
+        help="Tworzy pełną pionową kopię z rozmytym tłem.",
     )
+    make_smart_clips = st.checkbox(
+        "Smart Clips 3.0",
+        value=False,
+        disabled=(mode == "MP3"),
+        help=(
+            "Wykrywa twarze, analizuje ruch i zmiany scen, wybiera fragmenty "
+            "i generuje pionowe klipy 1080×1920."
+        ),
+    )
+
+with settings_d:
     browser = st.selectbox(
         "Cookies przeglądarki",
         ["Bez logowania", "Chrome", "Edge", "Firefox"],
         help="Używaj tylko do treści, do których masz legalny dostęp.",
     )
 
+smart_clip_count = 3
+smart_clip_length = 20
+smart_sample_interval = 0.8
+if make_smart_clips:
+    st.subheader("Smart Clips 3.0")
+    st.caption(
+        "Ranking fragmentów jest heurystyczny. Bierze pod uwagę obecność twarzy, "
+        "ruch i zmiany scen. Nie ocenia znaczenia ani jakości wypowiedzi."
+    )
+    smart_1, smart_2, smart_3 = st.columns(3)
+    with smart_1:
+        smart_clip_count = st.slider("Liczba klipów", 1, 5, 3)
+    with smart_2:
+        smart_clip_length = st.slider("Długość klipu", 10, 45, 20, step=5)
+    with smart_3:
+        analysis_mode = st.selectbox(
+            "Dokładność analizy",
+            ["Standard", "Dokładna", "Szybka"],
+        )
+        smart_sample_interval = {
+            "Dokładna": 0.5,
+            "Standard": 0.8,
+            "Szybka": 1.2,
+        }[analysis_mode]
+
 ffmpeg_found = shutil.which("ffmpeg") is not None
 if not ffmpeg_found:
     st.warning(
-        "FFmpeg nie jest wykryty. Łączenie wideo z audio, MP3 i TikTok 9:16 "
-        "mogą nie działać. Instrukcja instalacji jest w README."
+        "FFmpeg nie jest wykryty. Łączenie wideo z audio, MP3, pionowe wideo "
+        "i Smart Clips nie będą działać. Instrukcja instalacji jest w README."
     )
 
 preview_button, download_button, clear_button = st.columns([1, 1, 1])
@@ -142,7 +191,7 @@ preview_button, download_button, clear_button = st.columns([1, 1, 1])
 with preview_button:
     check_links = st.button("Sprawdź linki", use_container_width=True)
 with download_button:
-    start_download = st.button("Pobierz kolejkę", type="primary", use_container_width=True)
+    start_download = st.button("Pobierz i przetwórz", type="primary", use_container_width=True)
 with clear_button:
     if st.button("Wyczyść wyniki", use_container_width=True):
         clear_results()
@@ -199,7 +248,7 @@ if st.session_state.previews:
 if start_download:
     if not valid_urls:
         st.error("Wklej przynajmniej jeden poprawny link z YouTube, X/Twitter lub Facebooka.")
-    elif (mode == "MP3" or make_tiktok) and not ffmpeg_found:
+    elif (mode == "MP3" or make_tiktok or make_smart_clips) and not ffmpeg_found:
         st.error("Ta operacja wymaga FFmpeg. Zainstaluj FFmpeg i uruchom aplikację ponownie.")
     else:
         progress = st.progress(0.0)
@@ -217,14 +266,15 @@ if start_download:
                     total_bytes = data.get("total_bytes") or data.get("total_bytes_estimate")
                     downloaded = data.get("downloaded_bytes") or 0
                     local_progress = (downloaded / total_bytes) if total_bytes else 0.05
-                    overall = (job_index + min(max(local_progress, 0.0), 0.9)) / total_jobs
+                    overall = (job_index + min(max(local_progress, 0.0), 0.82)) / total_jobs
                     progress.progress(min(max(overall, 0.0), 0.99))
                     status.write(f"{job_index + 1}/{total_jobs}: pobieranie {job_url}")
                 elif data.get("status") == "finished":
-                    overall = (job_index + 0.92) / total_jobs
+                    overall = (job_index + 0.84) / total_jobs
                     progress.progress(min(overall, 0.99))
                     status.write(f"{job_index + 1}/{total_jobs}: obróbka pliku")
 
+            smart_summary = []
             try:
                 opts = build_ydl_options(
                     temp_dir,
@@ -245,8 +295,57 @@ if start_download:
                     raise RuntimeError("Nie udało się znaleźć pobranego pliku multimedialnego.")
 
                 if make_tiktok and mode != "MP3":
-                    status.write(f"{index + 1}/{total_jobs}: tworzenie wersji TikTok 9:16")
+                    status.write(f"{index + 1}/{total_jobs}: tworzenie pełnej wersji TikTok 9:16")
                     prepare_tiktok_9x16(primary_file)
+
+                if make_smart_clips and mode != "MP3":
+                    status.write(f"{index + 1}/{total_jobs}: Smart Clips analizuje twarze i sceny")
+
+                    def analysis_progress(local_value, job_index=index):
+                        overall = (job_index + 0.86 + min(max(local_value, 0.0), 1.0) * 0.07) / total_jobs
+                        progress.progress(min(overall, 0.99))
+
+                    candidates, metadata = analyze_video_for_clips(
+                        primary_file,
+                        clip_length=smart_clip_length,
+                        max_clips=smart_clip_count,
+                        sample_interval=smart_sample_interval,
+                        progress_callback=analysis_progress,
+                    )
+
+                    if not candidates:
+                        raise RuntimeError("Smart Clips nie znalazł fragmentów do wygenerowania.")
+
+                    write_analysis_report(
+                        temp_dir,
+                        primary_file.name,
+                        candidates,
+                        metadata,
+                    )
+
+                    for clip_index, candidate in enumerate(candidates, start=1):
+                        status.write(
+                            f"{index + 1}/{total_jobs}: generowanie Smart Clip "
+                            f"{clip_index}/{len(candidates)}"
+                        )
+                        output = render_smart_clip(
+                            primary_file,
+                            candidate,
+                            int(metadata["width"]),
+                            int(metadata["height"]),
+                            clip_index,
+                        )
+                        smart_summary.append({
+                            "index": clip_index,
+                            "start": candidate.start,
+                            "end": candidate.end,
+                            "score": candidate.score,
+                            "face_ratio": candidate.face_ratio,
+                            "motion_score": candidate.motion_score,
+                            "scene_score": candidate.scene_score,
+                            "focus_x": candidate.focus_x,
+                            "file": str(output),
+                        })
 
                 files = list_output_files(temp_dir)
                 results.append({
@@ -255,6 +354,7 @@ if start_download:
                     "thumbnail": info.get("thumbnail"),
                     "temp_dir": temp_dir,
                     "files": [str(path) for path in files],
+                    "smart_clips": smart_summary,
                     "error": None,
                 })
             except Exception as exc:
@@ -263,7 +363,8 @@ if start_download:
                     "title": url,
                     "thumbnail": None,
                     "temp_dir": temp_dir,
-                    "files": [],
+                    "files": [str(path) for path in list_output_files(temp_dir)],
+                    "smart_clips": smart_summary,
                     "error": str(exc),
                 })
 
@@ -279,10 +380,19 @@ if st.session_state.download_results:
         with st.expander(title, expanded=True):
             if item.get("error"):
                 st.error(item["error"])
-                continue
 
             if item.get("thumbnail"):
                 st.image(item["thumbnail"], width=240)
+
+            if item.get("smart_clips"):
+                st.markdown("**Smart Clips 3.0**")
+                for smart in item["smart_clips"]:
+                    st.write(
+                        f"Klip {smart['index']}: "
+                        f"{format_duration(smart['start'])}–{format_duration(smart['end'])} | "
+                        f"wynik {smart['score']:.2f} | "
+                        f"twarz {smart['face_ratio'] * 100:.0f}%"
+                    )
 
             for file_index, path_string in enumerate(item.get("files", [])):
                 path = Path(path_string)
@@ -301,6 +411,6 @@ if st.session_state.download_results:
 
 st.divider()
 st.caption(
-    "Facebook i X częściej wymagają aktywnej sesji. Wtedy wybierz przeglądarkę, "
-    "w której jesteś zalogowany. Wersja TikTok 9:16 wymaga FFmpeg."
+    "Smart Clips 3.0 analizuje obraz lokalnie na komputerze. Facebook i X częściej "
+    "wymagają aktywnej sesji. FFmpeg jest wymagany do MP3 i pionowych klipów."
 )

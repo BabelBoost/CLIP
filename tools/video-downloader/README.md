@@ -1,21 +1,43 @@
-# Babel Boost Video Downloader 2.0
+# Babel Boost Video Downloader 3.0
 
 Lokalna aplikacja do pracy z dozwolonymi materiałami z YouTube, X/Twitter i Facebooka.
 
-## Funkcje 2.0
+## Funkcje 3.0
 
 - wiele linków w jednej kolejce
 - podgląd tytułu, autora, długości i miniatury przed pobraniem
 - pasek postępu całej kolejki
 - MP4 w najlepszej jakości, 1080p, 720p albo 480p
 - MP3 192 kb/s
-- opcjonalne napisy, w tym napisy automatyczne, jeżeli źródło je udostępnia
+- opcjonalne napisy zwykłe i automatyczne, jeżeli źródło je udostępnia
 - wybór języków napisów, np. `pl,en,is`
 - zapis miniatury jako osobnego pliku
-- wersja TikTok 9:16 w 1080×1920
-- pionowe wideo z rozmytym tłem i pełnym oryginalnym kadrem na środku
+- pełna wersja TikTok 9:16 w 1080×1920 z rozmytym tłem
+- Smart Clips 3.0 z wykrywaniem twarzy przez OpenCV
+- automatyczne propozycje krótkich fragmentów na podstawie twarzy, ruchu i zmian scen
+- inteligentne kadrowanie 9:16 z przesunięciem kadru w stronę wykrytej twarzy
+- automatyczne generowanie 1–5 gotowych pionowych klipów
+- raport `smartclip_analysis.json` z oceną i czasami wybranych fragmentów
 - cookies z Chrome, Edge lub Firefox dla treści, do których użytkownik ma legalny dostęp
 - automatyczne testy GitHub Actions
+
+## Jak działa Smart Clips
+
+Smart Clips analizuje próbki obrazu z filmu. Dla każdej próbki sprawdza obecność twarzy, ilość ruchu i zmianę sceny. Następnie tworzy nakładające się okna czasowe, nadaje im wynik i wybiera najwyżej ocenione fragmenty bez wzajemnego nakładania.
+
+Waga rankingu:
+
+- obecność twarzy: 50%
+- ruch: 32%
+- zmiany scen: 18%
+
+To ranking heurystyczny. Nie rozumie znaczenia wypowiedzi ani nie ocenia treści merytorycznej. Dlatego najlepszy fragment według algorytmu oznacza fragment najbardziej aktywny wizualnie według tych kryteriów.
+
+## Inteligentne kadrowanie 9:16
+
+Jeżeli film jest poziomy, aplikacja wykrywa położenie największej twarzy w analizowanych klatkach. Dla wybranego fragmentu oblicza medianę położenia twarzy i przesuwa pionowy crop w jej stronę. Gdy twarz nie zostanie wykryta, używany jest środek kadru.
+
+Gotowe Smart Clips mają format MP4 1080×1920.
 
 ## Ważne
 
@@ -28,6 +50,8 @@ Używaj aplikacji wyłącznie do materiałów, które należą do Ciebie, są ud
 3. Otwórz folder `tools/video-downloader`.
 4. Uruchom `run_windows.bat`.
 5. Aplikacja otworzy się w przeglądarce.
+
+Przy pierwszym uruchomieniu zostaną zainstalowane również OpenCV i NumPy potrzebne do Smart Clips.
 
 Alternatywnie:
 
@@ -63,17 +87,18 @@ Na macOS:
 brew install ffmpeg
 ```
 
-## Jak używać kolejki
+## Jak używać Smart Clips 3.0
 
-Wklej kilka linków do pola tekstowego. Każdy może być w osobnym wierszu. Aplikacja usuwa duplikaty i pomija nieobsługiwane domeny.
+1. Wklej link lub kilka linków.
+2. Wybierz `Wideo MP4`.
+3. Zaznacz `Smart Clips 3.0`.
+4. Ustaw liczbę klipów od 1 do 5.
+5. Ustaw długość klipu od 10 do 45 sekund.
+6. Wybierz dokładność analizy.
+7. Kliknij `Pobierz i przetwórz`.
+8. Pobierz gotowe pliki `*_smartclip_XX_9x16.mp4`.
 
-Najpierw możesz kliknąć `Sprawdź linki`. Zobaczysz tytuł, miniaturę, autora i długość materiału. Potem ustaw format, jakość, napisy, miniaturę i opcję TikTok 9:16. Kliknij `Pobierz kolejkę`.
-
-## TikTok 9:16
-
-Opcja `Przygotuj TikTok 9:16` tworzy dodatkowy plik MP4 1080×1920. Oryginalny obraz nie jest agresywnie przycinany. Film jest skalowany do środka pionowego kadru, a puste miejsce wypełnia rozmyte tło z tego samego materiału.
-
-Ten tryb wymaga FFmpeg.
+Aplikacja pokaże również czas początku i końca fragmentu, wynik rankingu oraz procent próbek z wykrytą twarzą.
 
 ## Napisy
 
@@ -97,10 +122,12 @@ video-downloader/
 ├── downloader/
 │   ├── __init__.py
 │   ├── core.py
-│   └── media.py
+│   ├── media.py
+│   └── smartclip.py
 ├── tests/
 │   ├── test_core.py
-│   └── test_media.py
+│   ├── test_media.py
+│   └── test_smartclip.py
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── run_windows.bat
@@ -109,7 +136,7 @@ video-downloader/
 └── .gitignore
 ```
 
-`app.py` obsługuje interfejs i kolejkę. `downloader/core.py` odpowiada za linki, opcje yt-dlp, napisy, miniatury i pliki wynikowe. `downloader/media.py` przygotowuje pionowe wideo przez FFmpeg.
+`app.py` obsługuje interfejs i kolejkę. `downloader/core.py` odpowiada za linki, yt-dlp, napisy, miniatury i pliki wynikowe. `downloader/media.py` tworzy bezpieczną pełną wersję 9:16 z rozmytym tłem. `downloader/smartclip.py` odpowiada za wykrywanie twarzy, analizę ruchu i scen, ranking fragmentów oraz inteligentne kadrowanie.
 
 ## Testy
 

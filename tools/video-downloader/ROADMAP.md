@@ -5,11 +5,8 @@
 - kolejka wielu linków
 - pasek postępu całej kolejki
 - podgląd tytułu, autora, długości i miniatury
-- pobieranie miniatur
-- pobieranie napisów zwykłych i automatycznych
-- wybór języków napisów
+- pobieranie miniatur i napisów
 - pełna wersja TikTok 9:16 w 1080×1920
-- rozmyte tło i zachowanie pełnego oryginalnego kadru
 - testy modułów oraz GitHub Actions
 
 ## v3.0 — gotowe
@@ -18,21 +15,25 @@
 - analiza ruchu i zmian scen
 - ranking kandydatów na krótkie klipy
 - wybór 1–5 niepokrywających się fragmentów
-- długość klipu 10–45 sekund
 - inteligentne kadrowanie poziomego materiału do 9:16
-- przesunięcie cropu w stronę wykrytej twarzy
-- fallback do środka kadru, gdy twarz nie została wykryta
-- generowanie gotowych MP4 1080×1920
-- raport JSON z wynikami analizy
-- trzy poziomy dokładności analizy
-- testy Smart Clips w GitHub Actions
+- generowanie MP4 1080×1920
+- raport JSON
 
-## v3.1
+## v3.1 — gotowe
 
-- analiza energii dźwięku i wykrywanie ciszy
-- preferowanie fragmentów z wyraźną mową
-- opcjonalne wypalanie pobranych napisów w Smart Clips
-- ręczne zatwierdzanie proponowanych przedziałów przed renderowaniem
+- analiza mowy i ciszy przez FFmpeg `silencedetect`
+- udział mowy jako część rankingu Smart Clips
+- Faster-Whisper do lokalnej automatycznej transkrypcji
+- modele Tiny, Base i Small
+- język Auto / PL / EN / IS
+- pełna transkrypcja SRT
+- osobne SRT dopasowane do każdego Smart Clip
+- opcjonalne wypalanie automatycznych napisów w MP4
+- podgląd proponowanych fragmentów przed renderowaniem
+- tekst transkrypcji obok propozycji
+- ręczne zaznaczanie klipów do renderowania
+- ranking 3.1: twarz 35%, mowa 30%, ruch 20%, sceny 15%
+- testy analizy ciszy, SRT i napisów
 
 ## v3.2
 
@@ -40,13 +41,22 @@
 - płynne przesuwanie kadru za rozmówcą
 - wykrywanie kilku rozmówców
 - tryb split-screen przy dwóch osobach
+- możliwość ręcznej korekty początku i końca propozycji
+
+## v3.3
+
+- automatyczne łamanie napisów do 1–2 krótkich linii
+- style napisów TikTok / clean / bold
+- podświetlanie aktualnie wypowiadanego słowa
+- bezpieczne strefy dla elementów interfejsu TikToka
 
 ## v4.0
 
-- lokalna transkrypcja mowy
-- ranking fragmentów również na podstawie treści wypowiedzi
-- automatyczne hooki i tytuły do klipów
-- eksport paczki klipu do katalogu `tiktok/`
+- analiza treści transkrypcji
+- ranking fragmentów również na podstawie wypowiedzi
+- automatyczne hooki i tytuły
+- opis i hashtagi do klipu
+- eksport paczki do katalogu `tiktok/`
 - opcjonalna aplikacja desktopowa
 
 ## Zasady bezpieczeństwa

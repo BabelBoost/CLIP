@@ -8,6 +8,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .speech import burn_subtitle_filter, detect_silences, speech_ratio
+
 
 @dataclass
 class FrameSignal:
@@ -27,6 +29,7 @@ class CandidateClip:
     motion_score: float
     scene_score: float
     focus_x: float
+    speech_ratio: float = 0.0
 
     @property
     def duration(self) -> float:
@@ -201,10 +204,15 @@ def scan_video(
     return signals, metadata
 
 
-def _window_score(signals: list[FrameSignal], start: float, end: float) -> CandidateClip:
+def _window_score(
+    signals: list[FrameSignal],
+    start: float,
+    end: float,
+    silences=None,
+) -> CandidateClip:
     window = [signal for signal in signals if start <= signal.time < end]
     if not window:
-        return CandidateClip(start, end, 0.0, 0.0, 0.0, 0.0, 0.5)
+        return CandidateClip(start, end, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0)
 
     face_signals = [signal for signal in window if signal.face_center_x is not None]
     face_ratio = len(face_signals) / len(window)
@@ -215,6 +223,8 @@ def _window_score(signals: list[FrameSignal], start: float, end: float) -> Candi
     scene_peaks = sum(1 for signal in window if signal.scene_change >= 0.28)
     scene_score = clamp(scene_peaks / 3.0, 0.0, 1.0)
 
+    speech_score = speech_ratio(start, end, silences) if silences is not None else 0.5
+
     if face_signals:
         centers = [signal.face_center_x for signal in face_signals if signal.face_center_x is not None]
         focus_x = float(np.median(centers))
@@ -222,9 +232,10 @@ def _window_score(signals: list[FrameSignal], start: float, end: float) -> Candi
         focus_x = 0.5
 
     score = (
-        face_ratio * 0.50
-        + motion_score * 0.32
-        + scene_score * 0.18
+        face_ratio * 0.35
+        + speech_score * 0.30
+        + motion_score * 0.20
+        + scene_score * 0.15
     )
 
     return CandidateClip(
@@ -235,6 +246,7 @@ def _window_score(signals: list[FrameSignal], start: float, end: float) -> Candi
         motion_score=float(motion_score),
         scene_score=float(scene_score),
         focus_x=float(clamp(focus_x, 0.0, 1.0)),
+        speech_ratio=float(speech_score),
     )
 
 
@@ -260,13 +272,14 @@ def suggest_clips(
     duration: float,
     clip_length: float = 20.0,
     max_clips: int = 3,
+    silences=None,
 ) -> list[CandidateClip]:
     if duration <= 0:
         return []
 
     clip_length = clamp(float(clip_length), 5.0, max(5.0, duration))
     if duration <= clip_length:
-        return [_window_score(signals, 0.0, duration)]
+        return [_window_score(signals, 0.0, duration, silences)]
 
     step = max(3.0, clip_length / 2.0)
     candidates: list[CandidateClip] = []
@@ -275,7 +288,7 @@ def suggest_clips(
     while start < duration:
         end = min(start + clip_length, duration)
         if end - start >= min(5.0, clip_length):
-            candidates.append(_window_score(signals, start, end))
+            candidates.append(_window_score(signals, start, end, silences))
         if end >= duration:
             break
         start += step
@@ -295,14 +308,28 @@ def analyze_video_for_clips(
         sample_interval=sample_interval,
         progress_callback=progress_callback,
     )
+
+    silences = None
+    silence_error = None
+    try:
+        silences = detect_silences(input_path)
+    except Exception as exc:
+        silence_error = str(exc)
+
     clips = suggest_clips(
         signals,
         duration=float(metadata["duration"]),
         clip_length=clip_length,
         max_clips=max_clips,
+        silences=silences,
     )
     metadata["samples"] = len(signals)
     metadata["face_samples"] = sum(1 for signal in signals if signal.face_center_x is not None)
+    metadata["speech_analysis"] = silences is not None
+    metadata["silence_intervals"] = len(silences or [])
+    metadata["silence_seconds"] = float(sum(item.duration for item in (silences or [])))
+    if silence_error:
+        metadata["speech_analysis_error"] = silence_error
     return clips, metadata
 
 
@@ -318,8 +345,12 @@ def build_smart_clip_command(
     candidate: CandidateClip,
     width: int,
     height: int,
+    subtitles_path: str | Path | None = None,
 ) -> list[str]:
     video_filter = build_smart_crop_filter(width, height, candidate.focus_x)
+    if subtitles_path:
+        video_filter = f"{video_filter},{burn_subtitle_filter(subtitles_path)}"
+
     return [
         ffmpeg,
         "-y",
@@ -347,6 +378,7 @@ def render_smart_clip(
     height: int,
     index: int,
     output_path: str | Path | None = None,
+    subtitles_path: str | Path | None = None,
 ) -> Path:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
@@ -360,6 +392,7 @@ def render_smart_clip(
         candidate,
         width,
         height,
+        subtitles_path=subtitles_path,
     )
     process = subprocess.run(
         command,
@@ -385,9 +418,9 @@ def write_analysis_report(
     target = Path(output_dir) / "smartclip_analysis.json"
     payload = {
         "source": source_name,
-        "engine": "Babel Boost Smart Clips 3.0",
+        "engine": "Babel Boost Smart Clips 3.1",
         "note": (
-            "Ranking jest heurystyczny. Ocenia obecność twarzy, ruch i zmiany scen, "
+            "Ranking jest heurystyczny. Ocenia mowę/ciszę, obecność twarzy, ruch i zmiany scen, "
             "a nie znaczenie wypowiedzi."
         ),
         "metadata": metadata,

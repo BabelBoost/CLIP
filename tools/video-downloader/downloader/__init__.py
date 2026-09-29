@@ -23,6 +23,19 @@ from .smartclip import (
     suggest_clips,
     write_analysis_report,
 )
+from .speech import (
+    SilenceInterval,
+    SpeechSegment,
+    burn_subtitle_filter,
+    clip_segments,
+    detect_silences,
+    parse_silencedetect_output,
+    speech_ratio,
+    transcript_for_window,
+    transcribe_video,
+    write_clip_srt,
+    write_srt,
+)
 
 __all__ = [
     "QUALITY_FORMATS",
@@ -48,4 +61,15 @@ __all__ = [
     "smart_clip_output_path",
     "suggest_clips",
     "write_analysis_report",
+    "SilenceInterval",
+    "SpeechSegment",
+    "burn_subtitle_filter",
+    "clip_segments",
+    "detect_silences",
+    "parse_silencedetect_output",
+    "speech_ratio",
+    "transcript_for_window",
+    "transcribe_video",
+    "write_clip_srt",
+    "write_srt",
 ]

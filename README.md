@@ -23,16 +23,23 @@ archive/
 
 ## Narzędzia
 
-### Babel Boost Video Downloader
+### Babel Boost Video Downloader 2.0
 
-Lokalne narzędzie Streamlit do pobierania własnych lub dozwolonych materiałów z YouTube, X/Twitter i Facebooka.
+Lokalne narzędzie Streamlit do pracy z własnymi lub dozwolonymi materiałami z YouTube, X/Twitter i Facebooka.
 
 Obsługuje:
 
-- MP4
-- 1080p, 720p i 480p
+- kolejkę wielu linków
+- podgląd tytułu, autora, długości i miniatury
+- MP4 w najlepszej jakości, 1080p, 720p i 480p
 - MP3
+- napisy zwykłe i automatyczne
+- wybór języków napisów
+- pobieranie miniatur
+- pasek postępu kolejki
+- automatyczne przygotowanie dodatkowego MP4 1080×1920 pod TikTok 9:16
 - cookies lokalnej przeglądarki dla treści, do których użytkownik ma legalny dostęp
+- testy GitHub Actions
 
 Kod i instrukcja: `tools/video-downloader/`
 

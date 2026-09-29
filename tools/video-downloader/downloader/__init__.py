@@ -36,6 +36,14 @@ from .speech import (
     write_clip_srt,
     write_srt,
 )
+from .viral import (
+    ViralScore,
+    hook_score,
+    pace_score,
+    rerank_candidates,
+    viral_score_for_window,
+    words_in_window,
+)
 
 __all__ = [
     "QUALITY_FORMATS",
@@ -72,4 +80,10 @@ __all__ = [
     "transcribe_video",
     "write_clip_srt",
     "write_srt",
+    "ViralScore",
+    "hook_score",
+    "pace_score",
+    "rerank_candidates",
+    "viral_score_for_window",
+    "words_in_window",
 ]

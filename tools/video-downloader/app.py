@@ -23,6 +23,7 @@ from downloader import (
     parse_urls,
     prepare_tiktok_9x16,
     render_smart_clip,
+    rerank_candidates,
     transcript_for_window,
     transcribe_video,
     write_analysis_report,
@@ -30,7 +31,7 @@ from downloader import (
 )
 
 st.set_page_config(
-    page_title="Babel Boost Video Downloader 3.1",
+    page_title="Babel Boost Video Downloader 3.2",
     page_icon="🎬",
     layout="wide",
 )
@@ -60,7 +61,7 @@ def file_kind(path: Path) -> str:
     suffix = path.suffix.lower()
     stem = path.stem.lower()
     if "_smartclip_" in stem and suffix == ".mp4":
-        return "Smart Clip 9:16"
+        return "Smart Viral Clip 9:16"
     if "_smartclip_" in stem and suffix == ".srt":
         return "Napisy Smart Clip"
     if "_tiktok_9x16" in stem:
@@ -90,15 +91,25 @@ def clear_results():
     st.session_state.previews = []
 
 
-st.title("Babel Boost Video Downloader 3.1")
+def candidate_from_dict(data: dict) -> CandidateClip:
+    return CandidateClip(**{
+        key: data[key]
+        for key in [
+            "start", "end", "score", "face_ratio", "motion_score",
+            "scene_score", "focus_x", "speech_ratio"
+        ]
+    })
+
+
+st.title("Babel Boost Video Downloader 3.2")
 st.caption(
-    "YouTube • X/Twitter • Facebook • Smart Clips • analiza mowy i ciszy • "
-    "automatyczne napisy • podgląd przed renderowaniem"
+    "YouTube • X/Twitter • Facebook • Smart Viral Clips • analiza mowy i ciszy • "
+    "Viral Potential • napisy • podgląd przed renderowaniem"
 )
 
 st.info(
     "Pobieraj tylko materiały, do których masz prawa lub zgodę. "
-    "Narzędzie nie omija DRM ani zabezpieczeń prywatnych treści."
+    "Viral Potential jest oceną heurystyczną — nie gwarantuje zasięgu ani popularności."
 )
 
 urls_text = st.text_area(
@@ -145,16 +156,12 @@ with settings_c:
         "Pełne wideo TikTok 9:16",
         value=False,
         disabled=(mode == "MP3"),
-        help="Tworzy pełną pionową kopię z rozmytym tłem.",
     )
     make_smart_clips = st.checkbox(
-        "Smart Clips 3.1",
+        "Smart Viral Clips 3.2",
         value=False,
         disabled=(mode == "MP3"),
-        help=(
-            "Analizuje twarze, ruch, sceny oraz mowę/ciszę. Najpierw pokazuje "
-            "proponowane fragmenty, a dopiero potem pozwala je renderować."
-        ),
+        help="Szuka fragmentów z mocnym początkiem, mową, tempem i dynamiką obrazu.",
     )
 
 with settings_d:
@@ -171,22 +178,23 @@ auto_subtitles = False
 burn_subtitles = False
 whisper_language = "auto"
 whisper_model = "base"
+viral_mode = False
 
 if make_smart_clips:
-    st.subheader("Smart Clips 3.1")
+    st.subheader("Smart Viral Clips 3.2")
     st.caption(
-        "Ranking jest heurystyczny: mowa/cisza + twarz + ruch + zmiany scen. "
-        "Nie ocenia znaczenia ani prawdziwości wypowiedzi."
+        "Program ocenia hook, tempo mowy, ilość ciszy, kontrast/liczby/pytania oraz dynamikę obrazu. "
+        "To wskaźnik potencjału, a nie obietnica virala."
     )
 
-    smart_1, smart_2, smart_3 = st.columns(3)
+    smart_1, smart_2, smart_3, smart_4 = st.columns(4)
     with smart_1:
         smart_clip_count = st.slider("Liczba propozycji", 1, 5, 3)
     with smart_2:
         smart_clip_length = st.slider("Długość klipu", 10, 45, 20, step=5)
     with smart_3:
         analysis_mode = st.selectbox(
-            "Dokładność analizy obrazu",
+            "Dokładność obrazu",
             ["Standard", "Dokładna", "Szybka"],
         )
         smart_sample_interval = {
@@ -194,22 +202,28 @@ if make_smart_clips:
             "Standard": 0.8,
             "Szybka": 1.2,
         }[analysis_mode]
+    with smart_4:
+        viral_mode = st.checkbox(
+            "Priorytet viralowy",
+            value=True,
+            help="Po transkrypcji przelicza kandydatów według Viral Potential 0–100.",
+        )
 
-    st.markdown("**Automatyczne napisy 3.1**")
+    st.markdown("**Transkrypcja i napisy**")
     sub_1, sub_2, sub_3, sub_4 = st.columns(4)
     with sub_1:
         auto_subtitles = st.checkbox(
             "Transkrybuj mowę",
             value=True,
-            help="Faster-Whisper działa lokalnie. Przy pierwszym użyciu pobierze model językowy.",
+            help="Faster-Whisper działa lokalnie. Przy pierwszym użyciu pobierze model.",
         )
     with sub_2:
-        burn_subtitles_choice = st.checkbox(
+        burn_choice = st.checkbox(
             "Wypal napisy w klipach",
             value=True,
             disabled=not auto_subtitles,
         )
-        burn_subtitles = bool(auto_subtitles and burn_subtitles_choice)
+        burn_subtitles = bool(auto_subtitles and burn_choice)
     with sub_3:
         language_label = st.selectbox(
             "Język mowy",
@@ -234,10 +248,13 @@ if make_smart_clips:
             "Small — dokładniejszy": "small",
         }[model_label]
 
+    if viral_mode and not auto_subtitles:
+        st.warning("Priorytet viralowy działa najlepiej z transkrypcją. Bez niej użyty będzie ranking wizualno-dźwiękowy.")
+
 ffmpeg_found = shutil.which("ffmpeg") is not None
 if not ffmpeg_found:
     st.warning(
-        "FFmpeg nie jest wykryty. MP3, analiza ciszy, pionowe wideo i Smart Clips "
+        "FFmpeg nie jest wykryty. MP3, analiza ciszy, pionowe wideo i Smart Viral Clips "
         "nie będą działać. Instrukcja instalacji jest w README."
     )
 
@@ -323,15 +340,12 @@ if start_download:
                     overall = (job_index + min(max(local_progress, 0.0), 0.78)) / total_jobs
                     progress.progress(min(max(overall, 0.0), 0.99))
                     status.write(f"{job_index + 1}/{total_jobs}: pobieranie {job_url}")
-                elif data.get("status") == "finished":
-                    overall = (job_index + 0.80) / total_jobs
-                    progress.progress(min(overall, 0.99))
-                    status.write(f"{job_index + 1}/{total_jobs}: obróbka pobranego pliku")
 
             smart_candidates = []
             transcript_segments = []
             transcript_meta = None
             warnings = []
+            metadata = None
 
             try:
                 opts = build_ydl_options(
@@ -356,56 +370,68 @@ if start_download:
                     status.write(f"{index + 1}/{total_jobs}: tworzenie pełnej wersji TikTok 9:16")
                     prepare_tiktok_9x16(primary_file)
 
-                metadata = None
                 if make_smart_clips and mode != "MP3":
-                    status.write(f"{index + 1}/{total_jobs}: analiza obrazu, mowy i ciszy")
+                    status.write(f"{index + 1}/{total_jobs}: szukanie kandydatów na klipy")
 
                     def analysis_progress(local_value, job_index=index):
-                        overall = (job_index + 0.82 + min(max(local_value, 0.0), 1.0) * 0.08) / total_jobs
+                        overall = (job_index + 0.82 + min(max(local_value, 0.0), 1.0) * 0.07) / total_jobs
                         progress.progress(min(overall, 0.99))
 
+                    pool_count = min(15, max(smart_clip_count, smart_clip_count * 3 if viral_mode else smart_clip_count))
                     candidates, metadata = analyze_video_for_clips(
                         primary_file,
                         clip_length=smart_clip_length,
-                        max_clips=smart_clip_count,
+                        max_clips=pool_count,
                         sample_interval=smart_sample_interval,
                         progress_callback=analysis_progress,
                     )
                     if not candidates:
                         raise RuntimeError("Smart Clips nie znalazł fragmentów do zaproponowania.")
 
+                    segment_objects = []
                     if auto_subtitles:
                         try:
-                            status.write(
-                                f"{index + 1}/{total_jobs}: transkrypcja mowy — przy pierwszym użyciu model może się pobierać"
-                            )
+                            status.write(f"{index + 1}/{total_jobs}: transkrypcja i analiza języka")
                             segments, transcript_meta, _ = transcribe_video(
                                 primary_file,
                                 language=whisper_language,
                                 model_size=whisper_model,
                             )
+                            segment_objects = segments
                             transcript_segments = [asdict(segment) for segment in segments]
                             metadata["transcription"] = transcript_meta
                         except Exception as exc:
                             warnings.append(f"Transkrypcja nie powiodła się: {exc}")
 
-                    smart_candidates = []
-                    segment_objects = [SpeechSegment(**segment) for segment in transcript_segments]
-                    for candidate in candidates:
-                        item = asdict(candidate)
-                        item["transcript"] = transcript_for_window(
-                            segment_objects,
-                            candidate.start,
-                            candidate.end,
-                        ) if segment_objects else ""
-                        smart_candidates.append(item)
+                    chosen = []
+                    if viral_mode and segment_objects:
+                        ranked = rerank_candidates(candidates, segment_objects, smart_clip_count)
+                        for rank, (viral_total, candidate, viral) in enumerate(ranked, start=1):
+                            item = asdict(candidate)
+                            item["transcript"] = transcript_for_window(
+                                segment_objects, candidate.start, candidate.end
+                            )
+                            item["viral_rank"] = rank
+                            item["viral_total"] = viral_total
+                            item["viral_hook"] = viral.hook
+                            item["viral_pace"] = viral.pace
+                            item["viral_punch"] = viral.punch
+                            item["viral_visual"] = viral.visual
+                            item["words_per_second"] = viral.words_per_second
+                            item["viral_reasons"] = viral.reasons
+                            chosen.append(item)
+                    else:
+                        for candidate in candidates[:smart_clip_count]:
+                            item = asdict(candidate)
+                            item["transcript"] = transcript_for_window(
+                                segment_objects, candidate.start, candidate.end
+                            ) if segment_objects else ""
+                            item["viral_total"] = None
+                            chosen.append(item)
 
-                    write_analysis_report(
-                        temp_dir,
-                        primary_file.name,
-                        candidates,
-                        metadata,
-                    )
+                    smart_candidates = chosen
+                    metadata["viral_mode"] = bool(viral_mode and segment_objects)
+                    write_analysis_report(temp_dir, primary_file.name, [candidate_from_dict(item) for item in chosen], metadata)
 
                 files = list_output_files(temp_dir)
                 results.append({
@@ -436,7 +462,7 @@ if start_download:
                     "transcript_segments": transcript_segments,
                     "transcript_meta": transcript_meta,
                     "burn_subtitles": burn_subtitles,
-                    "metadata": None,
+                    "metadata": metadata,
                     "rendered_smart_clips": [],
                     "warnings": warnings,
                     "error": str(exc),
@@ -445,7 +471,7 @@ if start_download:
             progress.progress((index + 1) / total_jobs)
 
         st.session_state.download_results = results
-        status.write("Analiza zakończona. Smart Clips możesz teraz obejrzeć i wybrać przed renderowaniem.")
+        status.write("Analiza zakończona. Obejrzyj propozycje i wybierz klipy do renderowania.")
 
 if st.session_state.download_results:
     st.subheader("Wyniki")
@@ -464,20 +490,11 @@ if st.session_state.download_results:
 
             candidates = item.get("smart_candidates") or []
             primary_path = Path(item.get("primary_file") or "")
+            metadata = item.get("metadata") or {}
 
             if candidates and primary_path.exists():
-                st.markdown("### Proponowane Smart Clips 3.1 — obejrzyj przed renderowaniem")
-                st.caption(
-                    "Każdy podgląd uruchamia oryginalny film od początku proponowanego fragmentu. "
-                    "Sprawdź go i zaznacz tylko te klipy, które chcesz utworzyć."
-                )
-
-                metadata = item.get("metadata") or {}
-                if metadata.get("speech_analysis"):
-                    st.caption(
-                        f"Analiza ciszy: {metadata.get('silence_intervals', 0)} odcinków, "
-                        f"łącznie {metadata.get('silence_seconds', 0.0):.1f} s ciszy."
-                    )
+                st.markdown("### Proponowane Smart Viral Clips — obejrzyj przed renderowaniem")
+                st.caption("Viral Potential 0–100 to wskaźnik heurystyczny, nie gwarancja wyniku na TikToku.")
 
                 if item.get("transcript_meta"):
                     transcript_meta = item["transcript_meta"]
@@ -488,25 +505,30 @@ if st.session_state.download_results:
                     )
 
                 for candidate_index, candidate_data in enumerate(candidates, start=1):
-                    candidate = CandidateClip(**{
-                        key: candidate_data[key]
-                        for key in [
-                            "start", "end", "score", "face_ratio", "motion_score",
-                            "scene_score", "focus_x", "speech_ratio"
-                        ]
-                    })
-                    st.markdown(f"**Propozycja {candidate_index}**")
+                    candidate = candidate_from_dict(candidate_data)
+                    rank_text = f"#{candidate_data.get('viral_rank', candidate_index)}"
+                    st.markdown(f"**Propozycja {rank_text}**")
                     left, right = st.columns([2, 1])
                     with left:
                         st.video(str(primary_path), start_time=int(candidate.start))
                     with right:
-                        st.write(
-                            f"Czas: {format_duration(candidate.start)}–{format_duration(candidate.end)}"
-                        )
-                        st.write(f"Wynik: {candidate.score:.2f}")
-                        st.write(f"Mowa: {candidate.speech_ratio * 100:.0f}%")
-                        st.write(f"Twarz: {candidate.face_ratio * 100:.0f}%")
-                        st.write(f"Ruch: {candidate.motion_score * 100:.0f}%")
+                        st.write(f"Czas: {format_duration(candidate.start)}–{format_duration(candidate.end)}")
+                        if candidate_data.get("viral_total") is not None:
+                            viral_points = round(candidate_data["viral_total"] * 100)
+                            st.metric("Viral Potential", f"{viral_points}/100")
+                            st.write(f"Hook: {candidate_data.get('viral_hook', 0) * 100:.0f}%")
+                            st.write(f"Tempo: {candidate_data.get('viral_pace', 0) * 100:.0f}%")
+                            st.write(f"Mowa: {candidate.speech_ratio * 100:.0f}%")
+                            st.write(f"Słów/s: {candidate_data.get('words_per_second', 0):.1f}")
+                            reasons = candidate_data.get("viral_reasons") or []
+                            if reasons:
+                                st.caption("Dlaczego wysoko: " + " • ".join(reasons))
+                        else:
+                            st.write(f"Wynik Smart Clips: {candidate.score:.2f}")
+                            st.write(f"Mowa: {candidate.speech_ratio * 100:.0f}%")
+                            st.write(f"Twarz: {candidate.face_ratio * 100:.0f}%")
+                            st.write(f"Ruch: {candidate.motion_score * 100:.0f}%")
+
                         selected = st.checkbox(
                             "Renderuj ten klip",
                             value=True,
@@ -520,7 +542,7 @@ if st.session_state.download_results:
                     st.divider()
 
                 if st.button(
-                    "Renderuj zaznaczone Smart Clips",
+                    "Renderuj zaznaczone Smart Viral Clips",
                     type="primary",
                     use_container_width=True,
                     key=f"render-{item_index}",
@@ -543,22 +565,12 @@ if st.session_state.download_results:
 
                         try:
                             for done, (candidate_index, candidate_data) in enumerate(selected_candidates):
-                                candidate = CandidateClip(**{
-                                    key: candidate_data[key]
-                                    for key in [
-                                        "start", "end", "score", "face_ratio", "motion_score",
-                                        "scene_score", "focus_x", "speech_ratio"
-                                    ]
-                                })
-                                render_status.write(
-                                    f"Renderowanie {done + 1}/{len(selected_candidates)}..."
-                                )
+                                candidate = candidate_from_dict(candidate_data)
+                                render_status.write(f"Renderowanie {done + 1}/{len(selected_candidates)}...")
 
                                 subtitles_path = None
                                 if item.get("burn_subtitles") and transcript_objects:
-                                    subtitles_path = Path(item["temp_dir"]) / (
-                                        f"smartclip_{candidate_index:02d}_captions.srt"
-                                    )
+                                    subtitles_path = Path(item["temp_dir"]) / f"smartclip_{candidate_index:02d}_captions.srt"
                                     write_clip_srt(
                                         transcript_objects,
                                         candidate.start,
@@ -578,17 +590,14 @@ if st.session_state.download_results:
                                 render_progress.progress((done + 1) / len(selected_candidates))
 
                             item["rendered_smart_clips"] = rendered
-                            item["files"] = [
-                                str(path) for path in list_output_files(item["temp_dir"])
-                            ]
+                            item["files"] = [str(path) for path in list_output_files(item["temp_dir"])]
                             st.session_state.download_results[item_index] = item
-                            render_status.write("Gotowe. Klipy są poniżej w sekcji plików.")
                             st.rerun()
                         except Exception as exc:
-                            st.error(f"Błąd renderowania Smart Clips: {exc}")
+                            st.error(f"Błąd renderowania Smart Viral Clips: {exc}")
 
             if item.get("rendered_smart_clips"):
-                st.success(f"Wyrenderowano Smart Clips: {len(item['rendered_smart_clips'])}")
+                st.success(f"Wyrenderowano klipów: {len(item['rendered_smart_clips'])}")
 
             files = [Path(path) for path in item.get("files", [])]
             files = [path for path in files if path.exists()]
@@ -608,6 +617,6 @@ if st.session_state.download_results:
 
 st.divider()
 st.caption(
-    "Smart Clips 3.1 analizuje pliki lokalnie. Faster-Whisper może przy pierwszej transkrypcji "
-    "pobrać model. Facebook i X częściej wymagają aktywnej sesji."
+    "Smart Viral Clips 3.2 działa lokalnie. Faster-Whisper może przy pierwszej transkrypcji "
+    "pobrać model. Viral Potential jest rankingiem pomocniczym, nie prognozą zasięgu."
 )

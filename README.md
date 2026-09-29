@@ -18,6 +18,7 @@ ads/
 templates/
 tools/
   video-downloader/
+  viral-clip-studio/
 archive/
 ```
 
@@ -49,6 +50,29 @@ Obsługuje:
 `Viral Potential` jest wskaźnikiem heurystycznym, a nie gwarancją popularności lub zasięgu.
 
 Kod i instrukcja: `tools/video-downloader/`
+
+### Viral Clip Studio
+
+Moduł do analizy już pobranego pliku wideo. Transkrybuje cały materiał, wyszukuje samodzielne fragmenty 15, 30 i 60 sekund, wybiera TOP 5 i przygotowuje pełny raport do TikToka, Reels oraz YouTube Shorts.
+
+Generuje:
+
+- dokładny timecode start i koniec
+- najmocniejszy cytat
+- hook na pierwsze 3 sekundy
+- tekst na ekran
+- Viral Score 1–10
+- emocję i krótkie uzasadnienie
+- sugestię dokładnego cięcia
+- zsynchronizowane napisy
+- opis, hashtagi i CTA
+- tabelę TOP 5
+- plan montażu najlepszego klipu sekunda po sekundzie
+- pionowe MP4 1080×1920 z napisami
+
+Dla polityki i publicystyki dostępny jest neutralny tryb zachowujący sens oraz kontekst wypowiedzi.
+
+Kod i instrukcja: `tools/viral-clip-studio/`
 
 ## Zasada pracy
 

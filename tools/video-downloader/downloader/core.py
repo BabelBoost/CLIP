@@ -171,6 +171,7 @@ def find_primary_media(folder: str) -> Path | None:
         p for p in list_output_files(folder)
         if p.suffix.lower() in MEDIA_EXTENSIONS
         and "_tiktok_9x16" not in p.stem.lower()
+        and "_smartclip_" not in p.stem.lower()
     ]
     if not files:
         return None

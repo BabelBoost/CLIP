@@ -16,11 +16,15 @@ from viralclip import (
     render_top_clips,
     save_reports,
     transcribe_video,
+    write_top5_copy,
 )
 
-st.set_page_config(page_title="Viral Clip Studio 3.0", layout="wide")
-st.title("Viral Clip Studio 3.0")
-st.caption("Wrzucasz film. Program analizuje całość, wybiera TOP 5 i tworzy gotowe MP4 9:16 z hookiem i dynamicznymi napisami.")
+st.set_page_config(page_title="Viral Clip Studio 3.1", layout="wide")
+st.title("Viral Clip Studio 3.1")
+st.caption(
+    "Wrzucasz film. Program wybiera TOP 5, usuwa dłuższe cisze, robi auto-zoom na twarz, "
+    "wyróżnia aktualne słowo i tworzy gotowe MP4 + opisy i hashtagi."
+)
 
 
 def score_label(score: float, inverse: bool = False) -> str:
@@ -44,16 +48,33 @@ with st.sidebar:
         help="Tryb publicystyczny zachowuje sens wypowiedzi i nie dopisuje ocen politycznych.",
     )
     content_mode = {"Auto": "auto", "Ogólny": "general", "Polityka / publicystyka": "public_affairs"}[content_label]
-    use_ollama = st.checkbox("Ulepsz copy lokalnym Ollama", value=False)
-    ollama_model = st.text_input("Model Ollama", value="qwen3:8b", disabled=not use_ollama)
+
+    st.subheader("Montaż 3.1")
     show_hook = st.checkbox("Hook przez pierwsze 3 sekundy", value=True)
     dynamic_subtitles = st.checkbox("Dynamiczne napisy", value=True)
+    highlight_words = st.checkbox("Wyróżniaj aktualnie wypowiadane słowo", value=True, disabled=not dynamic_subtitles)
+    auto_zoom = st.checkbox("Auto-zoom na twarz / mówcę", value=True)
+    trim_silence = st.checkbox("Automatycznie usuwaj dłuższe cisze", value=True)
+    silence_threshold = st.slider(
+        "Cisza do wycięcia od",
+        min_value=0.5,
+        max_value=1.5,
+        value=0.8,
+        step=0.1,
+        format="%.1f s",
+        disabled=not trim_silence,
+        help="Krótsze pauzy pozostają, żeby mowa nie brzmiała nienaturalnie.",
+    )
     burn_subtitles = st.checkbox("Wypal napisy w MP4", value=True)
+
+    st.subheader("Opcjonalne AI")
+    use_ollama = st.checkbox("Ulepsz copy lokalnym Ollama", value=False)
+    ollama_model = st.text_input("Model Ollama", value="qwen3:8b", disabled=not use_ollama)
 
 uploaded = st.file_uploader("Wybierz plik wideo", type=["mp4", "mov", "mkv", "webm", "m4v"])
 
 if uploaded:
-    workspace = Path(tempfile.mkdtemp(prefix="viral_clip_studio_3_"))
+    workspace = Path(tempfile.mkdtemp(prefix="viral_clip_studio_3_1_"))
     video_path = workspace / uploaded.name
     video_path.write_bytes(uploaded.getbuffer())
     st.video(str(video_path))
@@ -63,7 +84,7 @@ if uploaded:
         status = st.empty()
 
         def cb(value: float, message: str) -> None:
-            progress.progress(min(55, int(value * 55)))
+            progress.progress(min(52, int(value * 52)))
             status.write(message)
 
         try:
@@ -73,7 +94,7 @@ if uploaded:
                 language=None if language == "auto" else language,
                 progress_cb=cb,
             )
-            progress.progress(60)
+            progress.progress(57)
             status.write(f"Ocena viralowa. Wykryty język: {detected or language}")
 
             candidates = analyze_segments(segments, top_n=10, content_mode=content_mode)
@@ -83,12 +104,12 @@ if uploaded:
 
             output_root = workspace / "output"
             save_reports(candidates, output_root)
-            progress.progress(68)
+            progress.progress(64)
 
             rendered = []
             top5 = candidates[:5]
             for idx, clip in enumerate(top5, start=1):
-                status.write(f"Renderowanie TOP 5: klip {idx}/{len(top5)}")
+                status.write(f"Montaż 3.1: klip {idx}/{len(top5)}")
                 rendered.extend(
                     render_top_clips(
                         video_path,
@@ -98,19 +119,30 @@ if uploaded:
                         burn_subtitles=burn_subtitles,
                         show_hook=show_hook,
                         dynamic_subtitles=dynamic_subtitles,
+                        segments=segments,
+                        highlight_words=highlight_words,
+                        auto_zoom=auto_zoom,
+                        trim_silence=trim_silence,
+                        silence_threshold=silence_threshold,
                     )
                 )
-                progress.progress(68 + int(idx / max(1, len(top5)) * 28))
+                progress.progress(64 + int(idx / max(1, len(top5)) * 30))
 
-            zip_path = package_clips(rendered, output_root / "viral_top5_tiktok.zip")
+            copy_files = write_top5_copy(top5, output_root / "copy", count=5)
+            zip_path = package_clips(
+                rendered,
+                output_root / "viral_top5_tiktok_3_1.zip",
+                extra_files=copy_files,
+            )
 
             st.session_state["workspace"] = str(workspace)
             st.session_state["video_path"] = str(video_path)
             st.session_state["candidates"] = [c.to_dict() for c in candidates]
             st.session_state["rendered"] = [str(p) for p in rendered]
+            st.session_state["copy_files"] = [str(p) for p in copy_files]
             st.session_state["zip_path"] = str(zip_path)
             progress.progress(100)
-            status.success("Gotowe. TOP 5 zostało przeanalizowane i wyrenderowane.")
+            status.success("Gotowe. TOP 5 ma montaż 3.1, napisy, copy i paczkę ZIP.")
         except Exception as exc:
             st.exception(exc)
 
@@ -124,7 +156,7 @@ if st.session_state.get("candidates"):
         {
             "#": c.rank,
             "Timecode": f"{format_time(c.start)}-{format_time(c.end)}",
-            "Długość": f"{c.duration:.1f}s",
+            "Długość źródła": f"{c.duration:.1f}s",
             "Viral": round(c.viral_score),
             "Hook": round(c.hook_score),
             "Emocja": round(c.emotion_score),
@@ -157,6 +189,7 @@ if st.session_state.get("candidates"):
             st.markdown(f"**Dlaczego:** {c.reason}")
             st.markdown(f"**Opis TikTok:** {c.tiktok_description}")
             st.markdown(f"**Hashtagi:** {' '.join(c.hashtags)}")
+            st.markdown(f"**CTA:** {c.cta}")
 
     report = render_markdown(candidates)
     st.download_button(
@@ -176,27 +209,42 @@ if st.session_state.get("candidates"):
 
 if st.session_state.get("rendered"):
     st.subheader("Gotowe MP4 do TikToka")
+    copy_files = st.session_state.get("copy_files", [])
     for idx, value in enumerate(st.session_state["rendered"], start=1):
         path = Path(value)
         if path.exists():
             st.markdown(f"**Klip {idx}**")
             st.video(str(path))
-            st.download_button(
-                f"Pobierz klip {idx}",
-                path.read_bytes(),
-                file_name=path.name,
-                mime="video/mp4",
-                key=f"clip-download-{idx}-{path.name}",
-                use_container_width=True,
-            )
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    f"Pobierz klip {idx}",
+                    path.read_bytes(),
+                    file_name=path.name,
+                    mime="video/mp4",
+                    key=f"clip-download-{idx}-{path.name}",
+                    use_container_width=True,
+                )
+            if idx <= len(copy_files):
+                copy_path = Path(copy_files[idx - 1])
+                if copy_path.exists():
+                    with col2:
+                        st.download_button(
+                            f"Pobierz opis + hashtagi {idx}",
+                            copy_path.read_bytes(),
+                            file_name=copy_path.name,
+                            mime="text/plain",
+                            key=f"copy-download-{idx}-{copy_path.name}",
+                            use_container_width=True,
+                        )
 
 if st.session_state.get("zip_path"):
     zip_path = Path(st.session_state["zip_path"])
     if zip_path.exists():
         st.download_button(
-            "POBIERZ TOP 5 JAKO ZIP",
+            "POBIERZ TOP 5 + OPISY I HASHTAGI JAKO ZIP",
             zip_path.read_bytes(),
-            file_name="viral_top5_tiktok.zip",
+            file_name="viral_top5_tiktok_3_1.zip",
             mime="application/zip",
             type="primary",
             use_container_width=True,

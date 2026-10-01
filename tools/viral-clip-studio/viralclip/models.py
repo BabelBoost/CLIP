@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Any
 
 
@@ -25,6 +25,11 @@ class ClipCandidate:
     screen_text: str
     reason: str
     viral_score: float
+    hook_score: float
+    emotion_score: float
+    comment_potential: float
+    retention_score: float
+    context_dependency: float
     emotion: str
     suggested_length: int
     cut_before: str

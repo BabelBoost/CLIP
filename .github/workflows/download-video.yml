@@ -27,7 +27,7 @@ jobs:
         id: input
         shell: bash
         run: |
-          URL=$(tr -d '\r\n' < requests/download_url.txt)
+          URL=$(head -n 1 requests/download_url.txt | tr -d '\r\n')
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Download video
@@ -36,6 +36,9 @@ jobs:
           mkdir -p output
           yt-dlp \
             --no-playlist \
+            --geo-bypass \
+            --js-runtimes node \
+            --extractor-args "youtube:player_client=web,android,ios" \
             --merge-output-format mp4 \
             -f "bv*+ba/b" \
             -o "output/%(title).180B [%(id)s].%(ext)s" \

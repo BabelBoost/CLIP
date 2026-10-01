@@ -2,3 +2,4 @@ streamlit>=1.40
 pandas>=2.2
 faster-whisper>=1.1
 requests>=2.32
+opencv-python-headless>=4.10

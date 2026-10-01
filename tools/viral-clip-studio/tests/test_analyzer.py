@@ -25,6 +25,19 @@ def test_candidates_are_ranked_and_nonempty():
     assert clips[0].rank == 1
     assert clips[0].viral_score >= clips[-1].viral_score
     assert 10 <= clips[0].duration <= 64
+    assert clips[0].suggested_length in {15, 30, 60}
+
+
+def test_detailed_scores_are_in_range():
+    clip = analyze_segments(sample_segments(), top_n=1, content_mode="general")[0]
+    assert 0 <= clip.viral_score <= 100
+    assert 0 <= clip.hook_score <= 100
+    assert 0 <= clip.emotion_score <= 100
+    assert 0 <= clip.comment_potential <= 100
+    assert 0 <= clip.retention_score <= 100
+    assert 0 <= clip.context_dependency <= 100
+    assert clip.hook
+    assert clip.screen_text
 
 
 def test_public_affairs_hook_uses_source_wording():

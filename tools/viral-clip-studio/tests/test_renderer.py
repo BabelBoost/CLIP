@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from viralclip.models import ClipCandidate, TranscriptSegment
 from viralclip.renderer import (
     build_speech_ranges,
@@ -95,8 +97,8 @@ def test_words_for_clip_uses_whisper_word_timestamps():
     ]
     words = words_for_clip(clip, segments)
     assert words[0]["text"] == "Ala"
-    assert words[0]["start"] == 0.0
-    assert words[-1]["end"] == 1.4
+    assert words[0]["start"] == pytest.approx(0.0)
+    assert words[-1]["end"] == pytest.approx(1.4)
 
 
 def test_speech_ranges_remove_only_longer_pause():
@@ -108,9 +110,9 @@ def test_speech_ranges_remove_only_longer_pause():
     ]
     ranges = build_speech_ranges(clip, words, silence_threshold=0.8, padding=0.1)
     assert len(ranges) == 2
-    assert ranges[0][0] == 0.1
-    assert ranges[0][1] == 1.5
-    assert ranges[1][0] == 3.9
+    assert ranges[0][0] == pytest.approx(0.1)
+    assert ranges[0][1] == pytest.approx(1.5)
+    assert ranges[1][0] == pytest.approx(3.9)
 
 
 def test_remap_words_closes_removed_gap():
@@ -121,8 +123,8 @@ def test_remap_words_closes_removed_gap():
     ranges = [(0.1, 0.9), (3.9, 4.6)]
     remapped = remap_words(words, ranges)
     assert len(remapped) == 2
-    assert remapped[0]["start"] == 0.1
-    assert 0.8 <= remapped[1]["start"] <= 1.0
+    assert remapped[0]["start"] == pytest.approx(0.1)
+    assert remapped[1]["start"] == pytest.approx(0.9)
 
 
 def test_social_copy_contains_description_hashtags_and_cta(tmp_path: Path):

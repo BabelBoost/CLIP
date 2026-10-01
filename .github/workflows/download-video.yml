@@ -34,15 +34,55 @@ jobs:
         shell: bash
         run: |
           mkdir -p output
+          URL="${{ steps.input.outputs.url }}"
+          OUT="output/%(title).180B [%(id)s].%(ext)s"
+
+          set +e
+
+          echo "Attempt 1: web_embedded"
           yt-dlp \
             --no-playlist \
             --geo-bypass \
             --js-runtimes node \
-            --extractor-args "youtube:player_client=web,android,ios" \
+            --extractor-args "youtube:player_client=web_embedded" \
             --merge-output-format mp4 \
             -f "bv*+ba/b" \
-            -o "output/%(title).180B [%(id)s].%(ext)s" \
-            "${{ steps.input.outputs.url }}"
+            -o "$OUT" \
+            "$URL"
+          STATUS=$?
+          if [ $STATUS -eq 0 ]; then exit 0; fi
+
+          rm -f output/*.part output/*.ytdl
+
+          echo "Attempt 2: android_vr"
+          yt-dlp \
+            --no-playlist \
+            --geo-bypass \
+            --js-runtimes node \
+            --extractor-args "youtube:player_client=android_vr" \
+            --merge-output-format mp4 \
+            -f "bv*+ba/b" \
+            -o "$OUT" \
+            "$URL"
+          STATUS=$?
+          if [ $STATUS -eq 0 ]; then exit 0; fi
+
+          rm -f output/*.part output/*.ytdl
+
+          echo "Attempt 3: web_safari HLS"
+          yt-dlp \
+            --no-playlist \
+            --geo-bypass \
+            --js-runtimes node \
+            --extractor-args "youtube:player_client=web_safari" \
+            --merge-output-format mp4 \
+            -f "best[protocol^=m3u8]/best" \
+            -o "$OUT" \
+            "$URL"
+          STATUS=$?
+          if [ $STATUS -eq 0 ]; then exit 0; fi
+
+          exit $STATUS
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4

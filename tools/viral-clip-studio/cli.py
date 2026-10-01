@@ -10,6 +10,7 @@ from viralclip import (
     render_top_clips,
     save_reports,
     transcribe_video,
+    write_top5_copy,
 )
 
 
@@ -25,6 +26,10 @@ def main() -> None:
     p.add_argument("--no-hook", action="store_true", help="Do not burn the 0-3 second hook")
     p.add_argument("--static-subtitles", action="store_true", help="Use classic subtitles instead of dynamic captions")
     p.add_argument("--no-subtitles", action="store_true", help="Render without burned-in subtitles")
+    p.add_argument("--no-word-highlight", action="store_true", help="Disable active-word highlighting")
+    p.add_argument("--no-auto-zoom", action="store_true", help="Disable automatic face/speaker zoom")
+    p.add_argument("--keep-silence", action="store_true", help="Do not remove longer pauses")
+    p.add_argument("--silence-threshold", type=float, default=0.8, help="Remove pauses longer than this many seconds")
     p.add_argument("--output", default="output")
     args = p.parse_args()
 
@@ -53,12 +58,21 @@ def main() -> None:
         burn_subtitles=not args.no_subtitles,
         show_hook=not args.no_hook,
         dynamic_subtitles=not args.static_subtitles,
+        segments=segments,
+        highlight_words=not args.no_word_highlight,
+        auto_zoom=not args.no_auto_zoom,
+        trim_silence=not args.keep_silence,
+        silence_threshold=max(0.3, args.silence_threshold),
     )
     for path in rendered:
         print(f"Rendered: {path}")
 
+    copy_files = write_top5_copy(clips, out / "copy", count=count)
+    for path in copy_files:
+        print(f"Copy: {path}")
+
     if rendered:
-        zip_path = package_clips(rendered, out / "viral_top5_tiktok.zip")
+        zip_path = package_clips(rendered, out / "viral_top5_tiktok_3_1.zip", extra_files=copy_files)
         print(f"ZIP: {zip_path}")
 
 

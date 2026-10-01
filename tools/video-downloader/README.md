@@ -9,7 +9,10 @@ Wersja 3.2 rozszerza Smart Clips o ranking **Viral Potential 0–100**. Program 
 Viral Potential bierze pod uwagę:
 
 - mocny hook na początku fragmentu
-- pytanie, liczby i konkretne sformułowania
+- emocje i zmianę tonu wypowiedzi
+- potencjał do komentarzy i dyskusji
+- zależność od wcześniejszego kontekstu
+- pytania, liczby i konkretne sformułowania
 - kontrast i mocne frazy w wypowiedzi
 - tempo mowy
 - małą ilość ciszy
@@ -17,6 +20,24 @@ Viral Potential bierze pod uwagę:
 - ruch i zmiany scen
 
 To ranking heurystyczny. Nie gwarantuje, że film stanie się viralem i nie przewiduje algorytmu TikToka.
+
+## Automatyczne odrzucanie słabych fragmentów
+
+Przed pokazaniem propozycji program liczy cztery dodatkowe wskaźniki:
+
+- `HOOK SCORE` 0–100: siła pierwszego komunikatu, pytania, liczby, krótkie mocne otwarcie
+- `EMOTION SCORE` 0–100: emocjonalne słownictwo, szok, napięcie, niedowierzanie, mocny ton
+- `COMMENT POTENTIAL` 0–100: pytania, mocne tezy, uogólnienia i elementy prowokujące naturalną odpowiedź widza
+- `CONTEXT DEPENDENCY` 0–100: jak bardzo fragment zależy od tego, co było wcześniej. Tutaj niski wynik jest lepszy
+
+Fragment jest automatycznie odrzucany, gdy między innymi:
+
+- ma bardzo wysokie `CONTEXT DEPENDENCY`
+- zawiera za mało mowy
+- ma niski łączny Viral Potential
+- jednocześnie nie ma mocnego hooka, emocji ani potencjału komentarzy
+
+Dzięki temu spokojne, zależne od kontekstu lub pozbawione puenty fragmenty nie zajmują miejsca w końcowej liście propozycji.
 
 ## Najprostsze użycie na Windows
 
@@ -30,7 +51,7 @@ To ranking heurystyczny. Nie gwarantuje, że film stanie się viralem i nie prze
 8. Model Whisper: `Base — polecany`.
 9. Język: `Auto` albo właściwy język filmu.
 10. Kliknij `Pobierz i analizuj`.
-11. Program pokaże proponowane fragmenty z wynikiem `Viral Potential`.
+11. Program odrzuci słabe fragmenty i pokaże najlepsze propozycje z wynikiem `Viral Potential`.
 12. Obejrzyj każdą propozycję i odznacz słabsze.
 13. Kliknij `Renderuj zaznaczone Smart Viral Clips`.
 14. Gotowe MP4 1080×1920 pojawią się w sekcji `Pliki`.
@@ -44,19 +65,23 @@ Przy każdej propozycji zobaczysz:
 - wynik tempa mowy
 - procent mowy w klipie
 - liczbę słów na sekundę
-- krótkie wyjaśnienie, np. `pytanie na początku`, `konkret/liczba`, `mało ciszy`, `dynamiczne tempo mowy`
+- krótkie wyjaśnienie, np. `pytanie na początku`, `emocjonalne słownictwo`, `teza prowokująca odpowiedź`, `fragment zrozumiały bez dużego kontekstu`
 - tekst z transkrypcji
 - podgląd oryginalnego filmu od początku proponowanego fragmentu
 
 ## Jak liczony jest Viral Potential
 
-Waga 3.2:
+Waga 3.2 po rozszerzeniu:
 
-- hook: 30%
-- tempo mowy: 22%
-- udział mowy / mało ciszy: 20%
-- kontrast i mocne frazy: 13%
-- dynamika obrazu: 15%
+- hook: 24%
+- emotion: 16%
+- comment potential: 15%
+- tempo mowy: 14%
+- udział mowy / mało ciszy: 12%
+- kontrast i mocne frazy: 8%
+- dynamika obrazu: 11%
+
+Od wyniku odejmowana jest kara zależna od `CONTEXT DEPENDENCY`. Maksymalna kara za brak samodzielności fragmentu wynosi 15 punktów procentowych.
 
 Dynamika obrazu łączy obecność twarzy, ruch i zmiany scen.
 

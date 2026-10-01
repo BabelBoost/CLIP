@@ -17,9 +17,21 @@ from viralclip import (
     transcribe_video,
 )
 
-st.set_page_config(page_title="Viral Clip Studio", page_icon="🎬", layout="wide")
-st.title("Viral Clip Studio")
-st.caption("MP4 → transkrypcja → TOP 5 → hooki → napisy → pionowe klipy 9:16")
+st.set_page_config(page_title="Viral Clip Studio", layout="wide")
+st.title("Viral Clip Studio 2.0")
+st.caption("Wideo -> transkrypcja -> ocena viralowa -> TOP fragmenty -> hook -> tekst na ekran -> klipy 9:16")
+
+
+def score_label(score: float, inverse: bool = False) -> str:
+    value = 100 - score if inverse else score
+    if value >= 80:
+        return "bardzo mocny"
+    if value >= 65:
+        return "mocny"
+    if value >= 50:
+        return "średni"
+    return "słaby"
+
 
 with st.sidebar:
     st.header("Ustawienia")
@@ -28,14 +40,15 @@ with st.sidebar:
     content_label = st.selectbox(
         "Rodzaj materiału",
         ["Auto", "Ogólny", "Polityka / publicystyka"],
-        help="Tryb publicystyczny używa neutralnych, kontekstowych hooków i nie zmienia sensu wypowiedzi.",
+        help="Tryb publicystyczny zachowuje sens wypowiedzi i nie dopisuje ocen politycznych.",
     )
     content_mode = {"Auto": "auto", "Ogólny": "general", "Polityka / publicystyka": "public_affairs"}[content_label]
+    top_n = st.slider("Ile kandydatów analizować", min_value=5, max_value=20, value=10, step=1)
     use_ollama = st.checkbox("Ulepsz hooki lokalnym Ollama", value=False)
     ollama_model = st.text_input("Model Ollama", value="qwen3:8b", disabled=not use_ollama)
     burn_subtitles = st.checkbox("Wypal napisy w gotowych klipach", value=True)
 
-uploaded = st.file_uploader("Wybierz pobrany plik wideo", type=["mp4", "mov", "mkv", "webm", "m4v"])
+uploaded = st.file_uploader("Wybierz plik wideo", type=["mp4", "mov", "mkv", "webm", "m4v"])
 
 if uploaded:
     workspace = Path(tempfile.mkdtemp(prefix="viral_clip_studio_"))
@@ -59,9 +72,9 @@ if uploaded:
                 progress_cb=cb,
             )
             status.write(f"Analiza treści. Wykryty język: {detected or language}")
-            candidates = analyze_segments(segments, top_n=10, content_mode=content_mode)
+            candidates = analyze_segments(segments, top_n=top_n, content_mode=content_mode)
             if use_ollama:
-                status.write("Ulepszanie opisów przez lokalny model Ollama…")
+                status.write("Ulepszanie hooków i opisów przez lokalny model Ollama")
                 candidates = enrich_with_ollama(candidates, model=ollama_model, content_mode=content_mode)
 
             st.session_state["workspace"] = str(workspace)
@@ -78,34 +91,61 @@ if st.session_state.get("candidates"):
     from viralclip.models import ClipCandidate
 
     candidates = [ClipCandidate(**item) for item in st.session_state["candidates"]]
-    st.subheader("TOP 5")
+    st.subheader("TOP 5 fragmentów")
+
     table = pd.DataFrame([
         {
-            "Ranking": c.rank,
-            "Timecode": f"{format_time(c.start)}–{format_time(c.end)}",
-            "Długość": f"{c.duration:.1f}s",
-            "Temat": c.topic,
-            "Hook": c.hook,
-            "Viral Score": c.viral_score,
+            "#": c.rank,
+            "Timecode": f"{format_time(c.start)}-{format_time(c.end)}",
+            "Materiał": f"{c.duration:.1f}s",
+            "Klip": f"{c.suggested_length}s",
+            "Viral": round(c.viral_score),
+            "Hook": round(c.hook_score),
+            "Emocja": round(c.emotion_score),
+            "Komentarze": round(c.comment_potential),
+            "Retencja": round(c.retention_score),
+            "Kontekst": round(c.context_dependency),
+            "Tekst na ekran": c.screen_text,
         }
         for c in candidates[:5]
     ])
     st.dataframe(table, use_container_width=True, hide_index=True)
+    st.caption("Kontekst: niższy wynik jest lepszy. Pozostałe wskaźniki: wyższy wynik jest lepszy.")
 
     for c in candidates[:5]:
-        with st.expander(f"#{c.rank}  {format_time(c.start)}–{format_time(c.end)}  |  {c.viral_score}/10", expanded=c.rank == 1):
-            st.markdown(f"**Cytat:** {c.quote}")
-            st.markdown(f"**Hook:** {c.hook}")
+        with st.expander(
+            f"#{c.rank}  {format_time(c.start)}-{format_time(c.end)} | Viral {c.viral_score:.0f}/100 | rekomendacja {c.suggested_length}s",
+            expanded=c.rank == 1,
+        ):
+            m1, m2, m3, m4, m5, m6 = st.columns(6)
+            m1.metric("Viral", f"{c.viral_score:.0f}/100")
+            m2.metric("Hook", f"{c.hook_score:.0f}/100")
+            m3.metric("Emocja", f"{c.emotion_score:.0f}/100")
+            m4.metric("Komentarze", f"{c.comment_potential:.0f}/100")
+            m5.metric("Retencja", f"{c.retention_score:.0f}/100")
+            m6.metric("Kontekst", f"{c.context_dependency:.0f}/100")
+
+            st.markdown(f"**Ocena hooka:** {score_label(c.hook_score)}")
+            st.markdown(f"**Samodzielność fragmentu:** {score_label(c.context_dependency, inverse=True)}")
+            st.markdown(f"**Najmocniejszy cytat:** {c.quote}")
+            st.markdown(f"**Hook na pierwsze 3 sekundy:** {c.hook}")
             st.markdown(f"**Tekst na ekran:** {c.screen_text}")
+            st.markdown(f"**Rekomendowany czas klipu:** {c.suggested_length} sekund")
             st.markdown(f"**Emocja:** {c.emotion}")
             st.markdown(f"**Dlaczego:** {c.reason}")
             st.markdown(f"**Cięcie:** {c.cut_before} {c.cut_after}")
-            st.markdown(f"**Opis:** {c.tiktok_description}")
+            st.markdown(f"**Opis TikTok:** {c.tiktok_description}")
             st.markdown(f"**Hashtagi:** {' '.join(c.hashtags)}")
             st.markdown(f"**CTA:** {c.cta}")
 
     report = render_markdown(candidates)
-    st.download_button("Pobierz raport Markdown", report.encode("utf-8"), "viral_report.md", "text/markdown", use_container_width=True)
+    st.download_button(
+        "Pobierz raport Markdown",
+        report.encode("utf-8"),
+        "viral_report.md",
+        "text/markdown",
+        use_container_width=True,
+    )
     st.download_button(
         "Pobierz dane JSON",
         json.dumps([c.to_dict() for c in candidates], ensure_ascii=False, indent=2).encode("utf-8"),
@@ -115,14 +155,14 @@ if st.session_state.get("candidates"):
     )
 
     st.subheader("Renderowanie")
-    render_count = st.selectbox("Ile najlepszych klipów wyrenderować?", [1, 3, 5], index=0)
+    render_count = st.selectbox("Ile najlepszych klipów wyrenderować", [1, 3, 5], index=0)
     if st.button("2. Wyrenderuj pionowe klipy 9:16", use_container_width=True):
         output = Path(st.session_state["workspace"]) / "output" / "clips"
         video = Path(st.session_state["video_path"])
         rendered = []
         try:
             for c in candidates[:render_count]:
-                with st.spinner(f"Renderowanie klipu #{c.rank}…"):
+                with st.spinner(f"Renderowanie klipu #{c.rank}"):
                     rendered.append(render_clip(video, c, output, burn_subtitles=burn_subtitles))
             st.success(f"Gotowe: {len(rendered)} klipów")
             for path in rendered:

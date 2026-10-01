@@ -11,15 +11,16 @@ from viralclip import (
     analyze_segments,
     enrich_with_ollama,
     format_time,
-    render_clip,
+    package_clips,
     render_markdown,
+    render_top_clips,
     save_reports,
     transcribe_video,
 )
 
-st.set_page_config(page_title="Viral Clip Studio", layout="wide")
-st.title("Viral Clip Studio 2.0")
-st.caption("Wideo -> transkrypcja -> ocena viralowa -> TOP fragmenty -> hook -> tekst na ekran -> klipy 9:16")
+st.set_page_config(page_title="Viral Clip Studio 3.0", layout="wide")
+st.title("Viral Clip Studio 3.0")
+st.caption("Wrzucasz film. Program analizuje całość, wybiera TOP 5 i tworzy gotowe MP4 9:16 z hookiem i dynamicznymi napisami.")
 
 
 def score_label(score: float, inverse: bool = False) -> str:
@@ -43,25 +44,26 @@ with st.sidebar:
         help="Tryb publicystyczny zachowuje sens wypowiedzi i nie dopisuje ocen politycznych.",
     )
     content_mode = {"Auto": "auto", "Ogólny": "general", "Polityka / publicystyka": "public_affairs"}[content_label]
-    top_n = st.slider("Ile kandydatów analizować", min_value=5, max_value=20, value=10, step=1)
-    use_ollama = st.checkbox("Ulepsz hooki lokalnym Ollama", value=False)
+    use_ollama = st.checkbox("Ulepsz copy lokalnym Ollama", value=False)
     ollama_model = st.text_input("Model Ollama", value="qwen3:8b", disabled=not use_ollama)
-    burn_subtitles = st.checkbox("Wypal napisy w gotowych klipach", value=True)
+    show_hook = st.checkbox("Hook przez pierwsze 3 sekundy", value=True)
+    dynamic_subtitles = st.checkbox("Dynamiczne napisy", value=True)
+    burn_subtitles = st.checkbox("Wypal napisy w MP4", value=True)
 
 uploaded = st.file_uploader("Wybierz plik wideo", type=["mp4", "mov", "mkv", "webm", "m4v"])
 
 if uploaded:
-    workspace = Path(tempfile.mkdtemp(prefix="viral_clip_studio_"))
+    workspace = Path(tempfile.mkdtemp(prefix="viral_clip_studio_3_"))
     video_path = workspace / uploaded.name
     video_path.write_bytes(uploaded.getbuffer())
     st.video(str(video_path))
 
-    if st.button("1. Przeanalizuj cały film", type="primary", use_container_width=True):
+    if st.button("ANALIZUJ I STWÓRZ TOP 5 KLIPÓW", type="primary", use_container_width=True):
         progress = st.progress(0)
         status = st.empty()
 
         def cb(value: float, message: str) -> None:
-            progress.progress(min(100, int(value * 100)))
+            progress.progress(min(55, int(value * 55)))
             status.write(message)
 
         try:
@@ -71,19 +73,44 @@ if uploaded:
                 language=None if language == "auto" else language,
                 progress_cb=cb,
             )
-            status.write(f"Analiza treści. Wykryty język: {detected or language}")
-            candidates = analyze_segments(segments, top_n=top_n, content_mode=content_mode)
+            progress.progress(60)
+            status.write(f"Ocena viralowa. Wykryty język: {detected or language}")
+
+            candidates = analyze_segments(segments, top_n=10, content_mode=content_mode)
             if use_ollama:
-                status.write("Ulepszanie hooków i opisów przez lokalny model Ollama")
+                status.write("Ulepszanie hooków i opisów przez lokalny Ollama")
                 candidates = enrich_with_ollama(candidates, model=ollama_model, content_mode=content_mode)
+
+            output_root = workspace / "output"
+            save_reports(candidates, output_root)
+            progress.progress(68)
+
+            rendered = []
+            top5 = candidates[:5]
+            for idx, clip in enumerate(top5, start=1):
+                status.write(f"Renderowanie TOP 5: klip {idx}/{len(top5)}")
+                rendered.extend(
+                    render_top_clips(
+                        video_path,
+                        [clip],
+                        output_root / "clips",
+                        count=1,
+                        burn_subtitles=burn_subtitles,
+                        show_hook=show_hook,
+                        dynamic_subtitles=dynamic_subtitles,
+                    )
+                )
+                progress.progress(68 + int(idx / max(1, len(top5)) * 28))
+
+            zip_path = package_clips(rendered, output_root / "viral_top5_tiktok.zip")
 
             st.session_state["workspace"] = str(workspace)
             st.session_state["video_path"] = str(video_path)
             st.session_state["candidates"] = [c.to_dict() for c in candidates]
-            st.session_state["segments"] = [s.to_dict() for s in segments]
-            save_reports(candidates, workspace / "output")
+            st.session_state["rendered"] = [str(p) for p in rendered]
+            st.session_state["zip_path"] = str(zip_path)
             progress.progress(100)
-            status.success("Analiza zakończona")
+            status.success("Gotowe. TOP 5 zostało przeanalizowane i wyrenderowane.")
         except Exception as exc:
             st.exception(exc)
 
@@ -91,14 +118,13 @@ if st.session_state.get("candidates"):
     from viralclip.models import ClipCandidate
 
     candidates = [ClipCandidate(**item) for item in st.session_state["candidates"]]
-    st.subheader("TOP 5 fragmentów")
+    st.subheader("TOP 5")
 
     table = pd.DataFrame([
         {
             "#": c.rank,
             "Timecode": f"{format_time(c.start)}-{format_time(c.end)}",
-            "Materiał": f"{c.duration:.1f}s",
-            "Klip": f"{c.suggested_length}s",
+            "Długość": f"{c.duration:.1f}s",
             "Viral": round(c.viral_score),
             "Hook": round(c.hook_score),
             "Emocja": round(c.emotion_score),
@@ -114,7 +140,7 @@ if st.session_state.get("candidates"):
 
     for c in candidates[:5]:
         with st.expander(
-            f"#{c.rank}  {format_time(c.start)}-{format_time(c.end)} | Viral {c.viral_score:.0f}/100 | rekomendacja {c.suggested_length}s",
+            f"#{c.rank}  {format_time(c.start)}-{format_time(c.end)} | Viral {c.viral_score:.0f}/100",
             expanded=c.rank == 1,
         ):
             m1, m2, m3, m4, m5, m6 = st.columns(6)
@@ -124,19 +150,13 @@ if st.session_state.get("candidates"):
             m4.metric("Komentarze", f"{c.comment_potential:.0f}/100")
             m5.metric("Retencja", f"{c.retention_score:.0f}/100")
             m6.metric("Kontekst", f"{c.context_dependency:.0f}/100")
-
-            st.markdown(f"**Ocena hooka:** {score_label(c.hook_score)}")
-            st.markdown(f"**Samodzielność fragmentu:** {score_label(c.context_dependency, inverse=True)}")
-            st.markdown(f"**Najmocniejszy cytat:** {c.quote}")
-            st.markdown(f"**Hook na pierwsze 3 sekundy:** {c.hook}")
+            st.markdown(f"**Hook 0–3 s:** {c.hook}")
             st.markdown(f"**Tekst na ekran:** {c.screen_text}")
-            st.markdown(f"**Rekomendowany czas klipu:** {c.suggested_length} sekund")
+            st.markdown(f"**Najmocniejszy cytat:** {c.quote}")
             st.markdown(f"**Emocja:** {c.emotion}")
             st.markdown(f"**Dlaczego:** {c.reason}")
-            st.markdown(f"**Cięcie:** {c.cut_before} {c.cut_after}")
             st.markdown(f"**Opis TikTok:** {c.tiktok_description}")
             st.markdown(f"**Hashtagi:** {' '.join(c.hashtags)}")
-            st.markdown(f"**CTA:** {c.cta}")
 
     report = render_markdown(candidates)
     st.download_button(
@@ -154,25 +174,30 @@ if st.session_state.get("candidates"):
         use_container_width=True,
     )
 
-    st.subheader("Renderowanie")
-    render_count = st.selectbox("Ile najlepszych klipów wyrenderować", [1, 3, 5], index=0)
-    if st.button("2. Wyrenderuj pionowe klipy 9:16", use_container_width=True):
-        output = Path(st.session_state["workspace"]) / "output" / "clips"
-        video = Path(st.session_state["video_path"])
-        rendered = []
-        try:
-            for c in candidates[:render_count]:
-                with st.spinner(f"Renderowanie klipu #{c.rank}"):
-                    rendered.append(render_clip(video, c, output, burn_subtitles=burn_subtitles))
-            st.success(f"Gotowe: {len(rendered)} klipów")
-            for path in rendered:
-                st.video(str(path))
-                st.download_button(
-                    f"Pobierz {path.name}",
-                    path.read_bytes(),
-                    file_name=path.name,
-                    mime="video/mp4",
-                    key=f"download-{path.name}",
-                )
-        except Exception as exc:
-            st.exception(exc)
+if st.session_state.get("rendered"):
+    st.subheader("Gotowe MP4 do TikToka")
+    for idx, value in enumerate(st.session_state["rendered"], start=1):
+        path = Path(value)
+        if path.exists():
+            st.markdown(f"**Klip {idx}**")
+            st.video(str(path))
+            st.download_button(
+                f"Pobierz klip {idx}",
+                path.read_bytes(),
+                file_name=path.name,
+                mime="video/mp4",
+                key=f"clip-download-{idx}-{path.name}",
+                use_container_width=True,
+            )
+
+if st.session_state.get("zip_path"):
+    zip_path = Path(st.session_state["zip_path"])
+    if zip_path.exists():
+        st.download_button(
+            "POBIERZ TOP 5 JAKO ZIP",
+            zip_path.read_bytes(),
+            file_name="viral_top5_tiktok.zip",
+            mime="application/zip",
+            type="primary",
+            use_container_width=True,
+        )

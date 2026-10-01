@@ -1,0 +1,27 @@
+name: Viral Clip Studio tests
+
+on:
+  push:
+    paths:
+      - "tools/viral-clip-studio/**"
+      - ".github/workflows/viral-clip-studio-tests.yml"
+  pull_request:
+    paths:
+      - "tools/viral-clip-studio/**"
+      - ".github/workflows/viral-clip-studio-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/viral-clip-studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install test dependencies
+        run: pip install pytest requests
+      - name: Run analyzer tests
+        run: PYTHONPATH=. pytest -q

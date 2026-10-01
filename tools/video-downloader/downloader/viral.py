@@ -264,7 +264,13 @@ def viral_score_for_window(
     comments, comment_reasons = comment_potential_score(text, emotion=emotion, punch=punch)
     context_dependency, context_reasons = context_dependency_score(text)
 
-    reasons = hook_reasons + emotion_reasons + comment_reasons
+    score_reasons = [
+        f"Hook Score {hook * 100:.0f}/100",
+        f"Emotion Score {emotion * 100:.0f}/100",
+        f"Comment Potential {comments * 100:.0f}/100",
+        f"Context Dependency {context_dependency * 100:.0f}/100",
+    ]
+    reasons = score_reasons + hook_reasons + emotion_reasons + comment_reasons
     if punch_matches:
         reasons.append("kontrast lub mocne sformułowanie")
     if wps >= 2.0:

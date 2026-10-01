@@ -21,6 +21,11 @@ INTENSIFIERS = {
 }
 SURPRISE_MARKERS = {"ale", "jednak", "tymczasem", "nagle", "okazuje się", "właśnie", "serio", "naprawdę"}
 QUESTION_MARKERS = {"czy", "dlaczego", "jak", "co", "kto", "po co", "ile"}
+OPEN_LOOP_MARKERS = {"za chwilę", "problem w tym", "i wtedy", "ale to nie wszystko", "okazuje się", "najlepsze jest", "najgorsze jest"}
+CONTEXT_MARKERS = {
+    "to", "tego", "tym", "ten", "ta", "tam", "tutaj", "wtedy", "wcześniej", "później", "on", "ona", "oni",
+    "jego", "jej", "ich", "tak", "takie", "taki", "właśnie", "dalej", "znowu", "również", "natomiast",
+}
 PUBLIC_AFFAIRS_MARKERS = {
     "rząd", "premier", "prezydent", "minister", "sejm", "senat", "partia", "wybory", "poseł", "polityk",
     "ustawa", "budżet", "podat", "koalicja", "opozycja", "unia europejska", "nato", "kandydat",
@@ -40,6 +45,10 @@ def format_time(seconds: float) -> str:
     h, rem = divmod(seconds, 3600)
     m, s = divmod(rem, 60)
     return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
+
+
+def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
+    return round(max(low, min(high, value)), 1)
 
 
 def _sentences(text: str) -> list[str]:
@@ -90,21 +99,100 @@ def _auto_public_affairs(text: str) -> bool:
     return sum(1 for marker in PUBLIC_AFFAIRS_MARKERS if marker in low) >= 2
 
 
-def _score(text: str, duration: float) -> float:
+def _hook_score(text: str) -> float:
+    quote = _strongest_sentence(text)
+    low = quote.lower()
+    words = re.findall(r"\w+", quote, flags=re.UNICODE)
+    score = 28 + _sentence_strength(quote) * 10
+    if "?" in quote:
+        score += 9
+    if "!" in quote:
+        score += 7
+    if re.search(r"\b\d+[\d.,%]*\b", quote):
+        score += 7
+    if any(marker in low for marker in SURPRISE_MARKERS):
+        score += 9
+    if 5 <= len(words) <= 16:
+        score += 8
+    if len(words) > 28:
+        score -= 14
+    return _clamp(score)
+
+
+def _emotion_score(text: str) -> float:
     low = text.lower()
+    marker_hits = sum(sum(1 for marker in markers if marker in low) for markers in EMOTION_WORDS.values())
+    intensifiers = sum(1 for marker in INTENSIFIERS if marker in low)
+    punctuation = min(18, text.count("!") * 8 + text.count("?") * 4)
+    return _clamp(18 + marker_hits * 9 + intensifiers * 5 + punctuation)
+
+
+def _comment_potential(text: str) -> float:
+    low = text.lower()
+    score = 20.0
+    if "?" in text:
+        score += 25
+    score += min(24, sum(1 for marker in EMOTION_WORDS["konflikt"] if marker in low) * 6)
+    score += min(14, sum(1 for marker in QUESTION_MARKERS if re.search(rf"\b{re.escape(marker)}\b", low)) * 4)
+    if any(marker in low for marker in {"nigdy", "zawsze", "najlepszy", "najgorszy", "prawda", "kłamstwo"}):
+        score += 10
+    if 10 <= len(text.split()) <= 75:
+        score += 7
+    return _clamp(score)
+
+
+def _context_dependency(text: str) -> float:
+    low = clean_text(text).lower()
     words = re.findall(r"\w+", low, flags=re.UNICODE)
     if not words:
-        return 1.0
-    strength = _sentence_strength(_strongest_sentence(text))
-    conflict = sum(0.35 for marker in EMOTION_WORDS["konflikt"] if marker in low)
-    curiosity = sum(0.25 for marker in QUESTION_MARKERS if re.search(rf"\b{re.escape(marker)}\b", low))
-    surprise = sum(0.3 for marker in SURPRISE_MARKERS if marker in low)
-    punctuation = min(1.0, text.count("!") * 0.35 + text.count("?") * 0.25)
-    density = min(1.2, len(words) / max(duration, 1.0) / 2.6)
-    standalone = 0.8 if len(words) >= 12 else 0.2
-    ideal_duration = 0.9 if 14 <= duration <= 36 else 0.5 if duration <= 60 else 0.0
-    raw = 2.2 + strength * 0.95 + conflict + curiosity + surprise + punctuation + density + standalone + ideal_duration
-    return round(max(1.0, min(10.0, raw)), 1)
+        return 100.0
+    first = words[:6]
+    hits = sum(1 for word in words if word in CONTEXT_MARKERS)
+    score = 8 + min(45, hits * 5)
+    if first and first[0] in {"ale", "więc", "bo", "i", "natomiast", "wtedy", "dlatego"}:
+        score += 20
+    if any(word in CONTEXT_MARKERS for word in first):
+        score += 12
+    if len(words) < 12:
+        score += 18
+    if len(_sentences(text)) >= 2:
+        score -= 8
+    if re.search(r"\b[A-ZŁŚŻŹĆŃÓ][a-ząćęłńóśźż]{3,}\b", text):
+        score -= 8
+    return _clamp(score)
+
+
+def _retention_score(text: str, duration: float) -> float:
+    low = text.lower()
+    words = re.findall(r"\w+", low, flags=re.UNICODE)
+    words_per_second = len(words) / max(duration, 1.0)
+    score = 24.0
+    if 1.6 <= words_per_second <= 3.6:
+        score += 18
+    elif 1.1 <= words_per_second <= 4.3:
+        score += 10
+    score += min(18, sum(1 for marker in SURPRISE_MARKERS if marker in low) * 6)
+    score += min(16, sum(1 for marker in OPEN_LOOP_MARKERS if marker in low) * 8)
+    if "?" in text:
+        score += 8
+    if 12 <= duration <= 36:
+        score += 15
+    elif duration <= 60:
+        score += 8
+    if len(_sentences(text)) >= 2:
+        score += 7
+    return _clamp(score)
+
+
+def _score(text: str, duration: float) -> tuple[float, float, float, float, float, float]:
+    hook = _hook_score(text)
+    emotion = _emotion_score(text)
+    comments = _comment_potential(text)
+    retention = _retention_score(text, duration)
+    context = _context_dependency(text)
+    independence = 100 - context
+    viral = hook * 0.30 + emotion * 0.18 + comments * 0.20 + retention * 0.22 + independence * 0.10
+    return _clamp(viral), hook, emotion, comments, retention, context
 
 
 def _truncate_words(text: str, max_words: int) -> str:
@@ -127,7 +215,21 @@ def _hook(text: str, public_affairs: bool) -> str:
 
 
 def _screen_text(text: str) -> str:
-    return _truncate_words(_strongest_sentence(text), 10)
+    strongest = _strongest_sentence(text)
+    words = strongest.split()
+    if len(words) <= 8:
+        return strongest
+    return _truncate_words(strongest, 8)
+
+
+def _suggested_length(duration: float, hook_score: float, context_dependency: float, retention_score: float) -> int:
+    if hook_score >= 76 and context_dependency <= 38 and duration <= 28:
+        return 15
+    if context_dependency >= 65 and duration >= 42:
+        return 60
+    if retention_score >= 62 or duration >= 22:
+        return 30
+    return 15
 
 
 def _subtitles_for_window(segments: list[TranscriptSegment], start: float, end: float) -> list[dict]:
@@ -141,21 +243,25 @@ def _subtitles_for_window(segments: list[TranscriptSegment], start: float, end: 
     return out
 
 
-def _reason(text: str, duration: float, public_affairs: bool) -> str:
-    features = []
-    low = text.lower()
-    if any(m in low for m in EMOTION_WORDS["konflikt"]):
-        features.append("wyraźne napięcie lub kontrast")
-    if any(m in low for m in SURPRISE_MARKERS):
-        features.append("nagła zmiana lub zaskoczenie")
-    if "?" in text:
-        features.append("naturalne pytanie pod komentarze")
-    if 14 <= duration <= 35:
-        features.append("dobry rytm pod krótki format")
+def _reason(text: str, duration: float, public_affairs: bool, scores: tuple[float, float, float, float, float, float]) -> str:
+    viral, hook, emotion, comments, retention, context = scores
+    features: list[str] = []
+    if hook >= 70:
+        features.append("mocne otwarcie")
+    if emotion >= 65:
+        features.append("wyraźna emocja")
+    if comments >= 65:
+        features.append("wysoki potencjał komentarzy")
+    if retention >= 65:
+        features.append("dobry rytm utrzymania uwagi")
+    if context <= 35:
+        features.append("fragment działa bez dużego kontekstu")
+    elif context >= 65:
+        features.append("fragment wymaga krótkiego wprowadzenia")
     if not features:
-        features.append("samodzielna, krótka wypowiedź z czytelną puentą")
-    suffix = ". W trybie publicystycznym zachowano dosłowny sens wypowiedzi" if public_affairs else ""
-    return ", ".join(features[:3]).capitalize() + suffix + "."
+        features.append("czytelna wypowiedź z możliwą puentą")
+    suffix = " W trybie publicystycznym hook zachowuje sens źródłowej wypowiedzi." if public_affairs else ""
+    return f"Viral Score {viral:.0f}/100. " + ", ".join(features[:3]).capitalize() + "." + suffix
 
 
 def _hashtags(text: str, public_affairs: bool) -> list[str]:
@@ -172,7 +278,7 @@ def _hashtags(text: str, public_affairs: bool) -> list[str]:
 def _description(text: str, public_affairs: bool) -> str:
     quote = _truncate_words(_strongest_sentence(text), 15)
     if public_affairs:
-        return f"Fragment wypowiedzi: „{quote}”. Oceń argument, nie nagłówek."
+        return f"Fragment wypowiedzi: „{quote}”. Oceń argument na podstawie pełnego kontekstu."
     return f"Najmocniejszy moment: „{quote}”. Jak Ty to odbierasz?"
 
 
@@ -183,7 +289,9 @@ def _build_candidate(window: list[TranscriptSegment], all_segments: list[Transcr
     text = clean_text(" ".join(s.text for s in window))
     public_affairs = content_mode == "public_affairs" or (content_mode == "auto" and _auto_public_affairs(text))
     quote = _strongest_sentence(text)
-    suggested = min((15, 30, 60), key=lambda d: abs(d - duration))
+    scores = _score(text, duration)
+    viral_score, hook_score, emotion_score, comment_potential, retention_score, context_dependency = scores
+    suggested = _suggested_length(duration, hook_score, context_dependency, retention_score)
     return ClipCandidate(
         rank=0,
         start=start,
@@ -192,8 +300,13 @@ def _build_candidate(window: list[TranscriptSegment], all_segments: list[Transcr
         quote=quote,
         hook=_hook(text, public_affairs),
         screen_text=_screen_text(text),
-        reason=_reason(text, duration, public_affairs),
-        viral_score=_score(text, duration),
+        reason=_reason(text, duration, public_affairs, scores),
+        viral_score=viral_score,
+        hook_score=hook_score,
+        emotion_score=emotion_score,
+        comment_potential=comment_potential,
+        retention_score=retention_score,
+        context_dependency=context_dependency,
         emotion=_emotion(text),
         suggested_length=suggested,
         cut_before=f"Usuń wszystko przed {format_time(start)}. Zacznij maksymalnie 0,3 s przed pierwszym słowem.",
@@ -201,7 +314,7 @@ def _build_candidate(window: list[TranscriptSegment], all_segments: list[Transcr
         subtitles=_subtitles_for_window(all_segments, start, end),
         tiktok_description=_description(text, public_affairs),
         hashtags=_hashtags(text, public_affairs),
-        cta="Jak oceniasz ten argument na podstawie tej wypowiedzi?" if public_affairs else "Co o tym myślisz?",
+        cta="Jak oceniasz ten argument na podstawie pełnej wypowiedzi?" if public_affairs else "Co o tym myślisz?",
         topic=_topic(text),
         text=text,
     )
@@ -232,7 +345,7 @@ def analyze_segments(segments: list[TranscriptSegment], top_n: int = 10, content
                     break
                 if duration > 64:
                     break
-    candidates.sort(key=lambda c: (-c.viral_score, abs(c.duration - c.suggested_length), c.start))
+    candidates.sort(key=lambda c: (-c.viral_score, c.context_dependency, -c.hook_score, c.start))
     selected: list[ClipCandidate] = []
     for cand in candidates:
         if any(_overlap_ratio(cand, existing) > 0.62 for existing in selected):
@@ -250,12 +363,12 @@ def enrich_with_ollama(candidates: list[ClipCandidate], model: str = "qwen3:8b",
     for cand in candidates:
         public_affairs = content_mode == "public_affairs" or (content_mode == "auto" and _auto_public_affairs(cand.text))
         safety = (
-            "Materiał może być polityczny/publicystyczny. Zachowaj neutralność, nie dopisuj ocen politycznych, nie zmieniaj znaczenia, hook oprzyj na dosłownej wypowiedzi."
+            "Materiał może być polityczny lub publicystyczny. Zachowaj neutralność, nie dopisuj ocen politycznych, nie zmieniaj znaczenia i oprzyj hook na źródłowej wypowiedzi."
             if public_affairs else "Nie wymyślaj faktów. Hook ma być mocny, ale zgodny z treścią."
         )
         prompt = f"""Jesteś montażystą krótkich form. {safety}
 Zwróć WYŁĄCZNIE poprawny JSON z polami: hook, screen_text, reason, emotion, description, hashtags, cta.
-Hashtags ma być tablicą 5-7 elementów. screen_text maks. 12 słów. description maks. 2 krótkie zdania.
+Hashtags ma być tablicą 5-7 elementów. screen_text maks. 10 słów. description maks. 2 krótkie zdania.
 Tekst fragmentu:\n{cand.text}\nNajmocniejszy cytat:\n{cand.quote}
 """
         try:
@@ -270,7 +383,7 @@ Tekst fragmentu:\n{cand.text}\nNajmocniejszy cytat:\n{cand.quote}
             updated.append(replace(
                 cand,
                 hook=clean_text(str(data.get("hook", cand.hook)))[:160],
-                screen_text=_truncate_words(str(data.get("screen_text", cand.screen_text)), 12),
+                screen_text=_truncate_words(str(data.get("screen_text", cand.screen_text)), 10),
                 reason=clean_text(str(data.get("reason", cand.reason)))[:420],
                 emotion=clean_text(str(data.get("emotion", cand.emotion)))[:40],
                 tiktok_description=clean_text(str(data.get("description", cand.tiktok_description)))[:300],

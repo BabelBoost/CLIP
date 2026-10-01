@@ -1,0 +1,50 @@
+name: Download Video
+
+on:
+  push:
+    paths:
+      - "requests/download_url.txt"
+  workflow_dispatch:
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install yt-dlp
+        run: python -m pip install --upgrade yt-dlp
+
+      - name: Read URL
+        id: input
+        shell: bash
+        run: |
+          URL=$(tr -d '\r\n' < requests/download_url.txt)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download video
+        shell: bash
+        run: |
+          mkdir -p output
+          yt-dlp \
+            --no-playlist \
+            --merge-output-format mp4 \
+            -f "bv*+ba/b" \
+            -o "output/%(title).180B [%(id)s].%(ext)s" \
+            "${{ steps.input.outputs.url }}"
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloaded-video
+          path: output/*
+          if-no-files-found: error
+          retention-days: 7

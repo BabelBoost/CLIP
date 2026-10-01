@@ -1,0 +1,59 @@
+VIRAL CLIP STUDIO 3.1
+PROSTA INSTRUKCJA DLA WINDOWS
+
+1. Zainstaluj Python 3.12
+   https://www.python.org/downloads/
+   Podczas instalacji zaznacz: Add Python to PATH
+
+2. Zainstaluj FFmpeg
+   Otworz Terminal Windows i wpisz:
+
+   winget install Gyan.FFmpeg
+
+   Po instalacji zamknij Terminal.
+
+3. Wejdz do folderu:
+   tools\viral-clip-studio
+
+4. Kliknij dwa razy:
+   run_windows.bat
+
+5. Przy pierwszym uruchomieniu program sam przygotuje potrzebne biblioteki.
+   Nie zamykaj czarnego okna.
+
+6. Aplikacja otworzy sie w przegladarce.
+
+7. Kliknij "Wybierz plik wideo" i wybierz MP4, MOV, MKV, WEBM lub M4V.
+
+8. Dla polskich materialow ustaw:
+   Jezyk: pl
+
+9. Dla debat, wywiadow, wiadomosci i polityki ustaw:
+   Rodzaj materialu: Polityka / publicystyka
+
+10. Zostaw wlaczone domyslne opcje montazu.
+
+11. Kliknij:
+    ANALIZUJ I STWORZ TOP 5 KLIPOW
+
+12. Po zakonczeniu dostaniesz:
+    TOP 5 fragmentow
+    Viral Score
+    Hook Score
+    Emotion Score
+    Comment Potential
+    Retention Score
+    Context Dependency
+    raport Markdown
+    raport JSON
+    ranking CSV
+    gotowe klipy MP4
+    opis i hashtagi do kazdego klipu
+    paczke ZIP ze wszystkim
+
+WAZNE
+Pierwsze uruchomienie moze pobrac model transkrypcji Whisper.
+Program dziala lokalnie na komputerze.
+Nie zamykaj okna run_windows.bat podczas analizy i renderowania.
+
+Jesli zobaczysz blad, zrob zrzut ekranu czarnego okna. Komunikat zostanie na ekranie i podpowie, czego brakuje.

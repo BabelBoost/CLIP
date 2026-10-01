@@ -14,7 +14,7 @@ def transcribe_video(
     language: str | None = "pl",
     progress_cb: Callable[[float, str], None] | None = None,
 ) -> tuple[list[TranscriptSegment], str | None]:
-    """Transcribe a local media file with faster-whisper."""
+    """Transcribe local media with segment and word-level timestamps."""
     video_path = Path(video_path)
     if not video_path.exists():
         raise FileNotFoundError(video_path)
@@ -27,7 +27,7 @@ def transcribe_video(
         str(video_path),
         language=language or None,
         vad_filter=True,
-        word_timestamps=False,
+        word_timestamps=True,
         beam_size=5,
         condition_on_previous_text=True,
     )
@@ -38,7 +38,30 @@ def transcribe_video(
         text = (seg.text or "").strip()
         if not text:
             continue
-        segments.append(TranscriptSegment(float(seg.start), float(seg.end), text))
+
+        words: list[dict] = []
+        for word in getattr(seg, "words", None) or []:
+            word_text = str(getattr(word, "word", "") or "").strip()
+            word_start = getattr(word, "start", None)
+            word_end = getattr(word, "end", None)
+            if not word_text or word_start is None or word_end is None:
+                continue
+            words.append(
+                {
+                    "start": round(float(word_start), 3),
+                    "end": round(float(word_end), 3),
+                    "text": word_text,
+                }
+            )
+
+        segments.append(
+            TranscriptSegment(
+                float(seg.start),
+                float(seg.end),
+                text,
+                words=words,
+            )
+        )
         if progress_cb:
             progress_cb(min(0.95, float(seg.end) / duration), f"Transkrypcja: {seg.end:.0f}s")
 

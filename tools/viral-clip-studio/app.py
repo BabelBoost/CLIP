@@ -122,7 +122,7 @@ if uploaded:
                 st.stop()
 
             if use_ollama:
-                status.write("Ulepszanie hooków i opisów przez lokalny Ollama")
+                status.write("Ulepszanie opisu, napisów i CTA przez lokalny Ollama")
                 candidates = enrich_with_ollama(candidates, model=ollama_model, content_mode=content_mode)
 
             output_root = workspace / "output"

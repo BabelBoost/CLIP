@@ -30,7 +30,9 @@ class ClipCandidate:
     emotion_score: float
     comment_potential: float
     retention_score: float
+    share_potential: float
     context_dependency: float
+    quality_label: str
     emotion: str
     suggested_length: int
     cut_before: str

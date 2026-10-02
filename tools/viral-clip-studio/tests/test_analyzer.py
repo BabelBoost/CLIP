@@ -35,7 +35,14 @@ def test_detailed_scores_are_in_range():
     assert 0 <= clip.emotion_score <= 100
     assert 0 <= clip.comment_potential <= 100
     assert 0 <= clip.retention_score <= 100
+    assert 0 <= clip.share_potential <= 100
     assert 0 <= clip.context_dependency <= 100
+    assert clip.quality_label in {
+        "PUBLIKUJ NAJPIERW",
+        "DOBRY MATERIAŁ",
+        "POPRAW HOOK LUB SKRÓĆ",
+        "ODRZUĆ / PRZEMONTUJ",
+    }
     assert clip.hook
     assert clip.screen_text
 
@@ -46,6 +53,26 @@ def test_public_affairs_hook_uses_source_wording():
         TranscriptSegment(8, 16, "Poseł odpowiedział, że to nieprawda i podał inny termin."),
         TranscriptSegment(16, 24, "Spór dotyczy więc konkretnej daty wejścia ustawy w życie."),
     ]
-    clips = analyze_segments(segs, top_n=1, content_mode="public_affairs")
+    clips = analyze_segments(segs, top_n=1, content_mode="public_affairs", include_weak=True)
     assert clips
     assert "Tu zaczyna się spór" not in clips[0].hook
+
+
+def test_weak_candidates_can_be_filtered_or_inspected():
+    weak = [
+        TranscriptSegment(0.0, 5.0, "Dzisiaj omawiamy zwykły temat bez szczególnych zmian."),
+        TranscriptSegment(5.0, 10.0, "Następnie przechodzimy do kolejnego spokojnego punktu rozmowy."),
+        TranscriptSegment(10.0, 15.0, "Na końcu pojawia się krótkie podsumowanie całego materiału."),
+        TranscriptSegment(15.0, 20.0, "Rozmowa trwa dalej w podobnym spokojnym tempie."),
+    ]
+    filtered = analyze_segments(weak, top_n=5, content_mode="general", min_viral_score=85)
+    inspected = analyze_segments(
+        weak,
+        top_n=5,
+        content_mode="general",
+        min_viral_score=85,
+        include_weak=True,
+    )
+    assert filtered == []
+    assert inspected
+    assert all(0 <= clip.share_potential <= 100 for clip in inspected)

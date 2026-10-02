@@ -23,6 +23,8 @@ def main() -> None:
     p.add_argument("--ollama", action="store_true", help="Improve copy fields using local Ollama")
     p.add_argument("--ollama-model", default="qwen3:8b")
     p.add_argument("--render", type=int, default=5, help="Render N best clips. Default: 5")
+    p.add_argument("--min-viral-score", type=float, default=55.0, help="Reject candidates below this Viral Score")
+    p.add_argument("--include-weak", action="store_true", help="Keep candidates below the minimum Viral Score")
     p.add_argument("--no-hook", action="store_true", help="Do not burn the 0-3 second hook")
     p.add_argument("--static-subtitles", action="store_true", help="Use classic subtitles instead of dynamic captions")
     p.add_argument("--no-subtitles", action="store_true", help="Render without burned-in subtitles")
@@ -43,7 +45,13 @@ def main() -> None:
     print(f"Transcription: {len(segments)} segments, language={detected}")
 
     count = max(0, args.render)
-    clips = analyze_segments(segments, top_n=max(10, count), content_mode=args.mode)
+    clips = analyze_segments(
+        segments,
+        top_n=max(10, count),
+        content_mode=args.mode,
+        min_viral_score=max(0.0, min(100.0, args.min_viral_score)),
+        include_weak=args.include_weak,
+    )
     if args.ollama:
         clips = enrich_with_ollama(clips, model=args.ollama_model, content_mode=args.mode)
 
@@ -72,7 +80,7 @@ def main() -> None:
         print(f"Copy: {path}")
 
     if rendered:
-        zip_path = package_clips(rendered, out / "viral_top5_tiktok_3_1.zip", extra_files=copy_files)
+        zip_path = package_clips(rendered, out / "viral_top5_tiktok_3_2.zip", extra_files=copy_files)
         print(f"ZIP: {zip_path}")
 
 

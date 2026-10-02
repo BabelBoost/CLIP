@@ -22,6 +22,10 @@ INTENSIFIERS = {
 SURPRISE_MARKERS = {"ale", "jednak", "tymczasem", "nagle", "okazuje się", "właśnie", "serio", "naprawdę"}
 QUESTION_MARKERS = {"czy", "dlaczego", "jak", "co", "kto", "po co", "ile"}
 OPEN_LOOP_MARKERS = {"za chwilę", "problem w tym", "i wtedy", "ale to nie wszystko", "okazuje się", "najlepsze jest", "najgorsze jest"}
+SHARE_MARKERS = {
+    "musisz", "warto", "sprawdź", "zobacz", "uważaj", "zapamiętaj", "ważne", "przydat",
+    "błąd", "porada", "sposób", "dlaczego", "jak zrobić", "nie rób", "każdy powinien",
+}
 CONTEXT_MARKERS = {
     "to", "tego", "tym", "ten", "ta", "tam", "tutaj", "wtedy", "wcześniej", "później", "on", "ona", "oni",
     "jego", "jej", "ich", "tak", "takie", "taki", "właśnie", "dalej", "znowu", "również", "natomiast",
@@ -184,15 +188,52 @@ def _retention_score(text: str, duration: float) -> float:
     return _clamp(score)
 
 
-def _score(text: str, duration: float) -> tuple[float, float, float, float, float, float]:
+def _share_potential(text: str, context_dependency: float) -> float:
+    low = text.lower()
+    words = re.findall(r"\w+", low, flags=re.UNICODE)
+    surprise_hits = sum(1 for marker in SURPRISE_MARKERS if marker in low)
+    emotion_hits = sum(sum(1 for marker in markers if marker in low) for markers in EMOTION_WORDS.values())
+    utility_hits = sum(1 for marker in SHARE_MARKERS if marker in low)
+
+    score = 18.0
+    score += min(24, surprise_hits * 8)
+    score += min(18, emotion_hits * 4)
+    score += min(20, utility_hits * 7)
+    if re.search(r"\b\d+[\d.,%]*\b", text):
+        score += 8
+    if 8 <= len(words) <= 90:
+        score += 8
+    if "!" in text:
+        score += 5
+    if context_dependency <= 35:
+        score += 12
+    elif context_dependency >= 65:
+        score -= 12
+    return _clamp(score)
+
+
+def _quality_label(viral_score: float) -> str:
+    if viral_score >= 85:
+        return "PUBLIKUJ NAJPIERW"
+    if viral_score >= 70:
+        return "DOBRY MATERIAŁ"
+    if viral_score >= 55:
+        return "POPRAW HOOK LUB SKRÓĆ"
+    return "ODRZUĆ / PRZEMONTUJ"
+
+
+def _score(text: str, duration: float) -> tuple[float, float, float, float, float, float, float]:
     hook = _hook_score(text)
     emotion = _emotion_score(text)
     comments = _comment_potential(text)
     retention = _retention_score(text, duration)
     context = _context_dependency(text)
-    independence = 100 - context
-    viral = hook * 0.30 + emotion * 0.18 + comments * 0.20 + retention * 0.22 + independence * 0.10
-    return _clamp(viral), hook, emotion, comments, retention, context
+    share = _share_potential(text, context)
+
+    # Pięć głównych sygnałów ma równą wagę. Context Dependency pozostaje
+    # osobnym sygnałem jakości i pomaga ocenić, czy klip działa samodzielnie.
+    viral = (hook + retention + emotion + comments + share) / 5
+    return _clamp(viral), hook, emotion, comments, retention, share, context
 
 
 def _truncate_words(text: str, max_words: int) -> str:
@@ -243,8 +284,8 @@ def _subtitles_for_window(segments: list[TranscriptSegment], start: float, end: 
     return out
 
 
-def _reason(text: str, duration: float, public_affairs: bool, scores: tuple[float, float, float, float, float, float]) -> str:
-    viral, hook, emotion, comments, retention, context = scores
+def _reason(text: str, duration: float, public_affairs: bool, scores: tuple[float, float, float, float, float, float, float]) -> str:
+    viral, hook, emotion, comments, retention, share, context = scores
     features: list[str] = []
     if hook >= 70:
         features.append("mocne otwarcie")
@@ -254,6 +295,8 @@ def _reason(text: str, duration: float, public_affairs: bool, scores: tuple[floa
         features.append("wysoki potencjał komentarzy")
     if retention >= 65:
         features.append("dobry rytm utrzymania uwagi")
+    if share >= 65:
+        features.append("wysoki potencjał udostępnień")
     if context <= 35:
         features.append("fragment działa bez dużego kontekstu")
     elif context >= 65:
@@ -290,7 +333,7 @@ def _build_candidate(window: list[TranscriptSegment], all_segments: list[Transcr
     public_affairs = content_mode == "public_affairs" or (content_mode == "auto" and _auto_public_affairs(text))
     quote = _strongest_sentence(text)
     scores = _score(text, duration)
-    viral_score, hook_score, emotion_score, comment_potential, retention_score, context_dependency = scores
+    viral_score, hook_score, emotion_score, comment_potential, retention_score, share_potential, context_dependency = scores
     suggested = _suggested_length(duration, hook_score, context_dependency, retention_score)
     return ClipCandidate(
         rank=0,
@@ -306,7 +349,9 @@ def _build_candidate(window: list[TranscriptSegment], all_segments: list[Transcr
         emotion_score=emotion_score,
         comment_potential=comment_potential,
         retention_score=retention_score,
+        share_potential=share_potential,
         context_dependency=context_dependency,
+        quality_label=_quality_label(viral_score),
         emotion=_emotion(text),
         suggested_length=suggested,
         cut_before=f"Usuń wszystko przed {format_time(start)}. Zacznij maksymalnie 0,3 s przed pierwszym słowem.",
@@ -325,7 +370,13 @@ def _overlap_ratio(a: ClipCandidate, b: ClipCandidate) -> float:
     return 0.0 if inter <= 0 else inter / min(a.duration, b.duration)
 
 
-def analyze_segments(segments: list[TranscriptSegment], top_n: int = 10, content_mode: str = "auto") -> list[ClipCandidate]:
+def analyze_segments(
+    segments: list[TranscriptSegment],
+    top_n: int = 10,
+    content_mode: str = "auto",
+    min_viral_score: float = 55.0,
+    include_weak: bool = False,
+) -> list[ClipCandidate]:
     if not segments:
         return []
     candidates: list[ClipCandidate] = []
@@ -345,9 +396,20 @@ def analyze_segments(segments: list[TranscriptSegment], top_n: int = 10, content
                     break
                 if duration > 64:
                     break
-    candidates.sort(key=lambda c: (-c.viral_score, c.context_dependency, -c.hook_score, c.start))
+    candidates.sort(
+        key=lambda c: (
+            -c.viral_score,
+            -c.share_potential,
+            -c.retention_score,
+            c.context_dependency,
+            -c.hook_score,
+            c.start,
+        )
+    )
     selected: list[ClipCandidate] = []
     for cand in candidates:
+        if not include_weak and cand.viral_score < min_viral_score:
+            continue
         if any(_overlap_ratio(cand, existing) > 0.62 for existing in selected):
             continue
         selected.append(cand)

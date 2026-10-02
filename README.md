@@ -51,7 +51,7 @@ Obsługuje:
 
 Kod i instrukcja: `tools/video-downloader/`
 
-### Viral Clip Studio 2.0
+### Viral Clip Studio 3.2
 
 Moduł do analizy już pobranego pliku wideo. Transkrybuje cały materiał, wyszukuje samodzielne fragmenty około 15, 30 i 60 sekund, wybiera TOP 5 i przygotowuje raport do TikToka, Reels oraz YouTube Shorts.
 
@@ -67,7 +67,9 @@ Generuje:
 - `Emotion Score 0–100`
 - `Comment Potential 0–100`
 - `Retention Score 0–100`
+- `Share Potential 0–100`
 - `Context Dependency 0–100`, gdzie niżej znaczy lepiej
+- automatyczne progi jakości: 85+, 70–84, 55–69 i odrzucenie słabszych fragmentów
 - emocję i krótkie uzasadnienie
 - sugestię dokładnego cięcia
 - zsynchronizowane napisy

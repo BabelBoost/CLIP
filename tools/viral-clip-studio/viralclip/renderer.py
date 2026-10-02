@@ -300,6 +300,18 @@ def _detect_face_layout(video_path: Path, clip: ClipCandidate) -> tuple[int, int
     except Exception:
         return None
 
+    # OpenCV can import successfully even when a broken/conflicting `cv2`
+    # package is installed. Face-aware auto zoom is optional, so degrade
+    # gracefully instead of crashing the whole render.
+    required = ("VideoCapture", "CascadeClassifier", "cvtColor", "COLOR_BGR2GRAY")
+    if any(not hasattr(cv2, name) for name in required):
+        return None
+
+    cv2_data = getattr(cv2, "data", None)
+    haarcascades = getattr(cv2_data, "haarcascades", None)
+    if not haarcascades:
+        return None
+
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
         return None
@@ -309,7 +321,12 @@ def _detect_face_layout(video_path: Path, clip: ClipCandidate) -> tuple[int, int
         capture.release()
         return None
 
-    cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    cascade_path = str(Path(haarcascades) / "haarcascade_frontalface_default.xml")
+    cascade = cv2.CascadeClassifier(cascade_path)
+    if hasattr(cascade, "empty") and cascade.empty():
+        capture.release()
+        return None
+
     observations: list[tuple[float, float, float]] = []
     for fraction in (0.12, 0.30, 0.50, 0.70, 0.88):
         when = clip.start + clip.duration * fraction

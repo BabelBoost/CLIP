@@ -1,4 +1,4 @@
-# Viral Clip Studio 3.2
+# Viral Clip Studio 3.3
 
 Lokalne narzędzie do analizy długiego materiału wideo i automatycznego tworzenia TOP 5 klipów do TikToka, Reels i YouTube Shorts.
 
@@ -10,21 +10,24 @@ Lokalne narzędzie do analizy długiego materiału wideo i automatycznego tworze
 4. Szuka samodzielnych fragmentów około 15, 30 i 60 sekund.
 5. Liczy `Hook Score`, `Retention Score`, `Emotion Score`, `Comment Potential`, `Share Potential` i `Context Dependency`.
 6. Liczy `Viral Score` jako średnią pięciu głównych sygnałów: hook, retencja, emocja, komentarze i udostępnienia.
-7. Domyślnie odrzuca fragmenty z `Viral Score` poniżej 55 jeszcze przed rankingiem TOP 5.
-8. Wybiera TOP 5 bez mocno nakładających się fragmentów.
-9. Dodaje hook na pierwsze 3 sekundy.
-10. Tworzy dynamiczne napisy.
-11. Wyróżnia aktualnie wypowiadane słowo.
-12. Wykrywa lokalnie twarz i robi delikatny punch-in/zoom w stronę dominującego mówcy.
-13. Jeśli twarz nie zostanie wykryta, stosuje delikatny zoom centralny.
-14. Wycina tylko dłuższe pauzy w mowie. Domyślny próg to 0,8 s.
-15. Zachowuje krótsze naturalne pauzy, żeby mowa nie brzmiała poszarpanie.
-16. Renderuje pion 1080×1920 z rozmytym tłem.
-17. Koduje H.264 + AAC + faststart.
-18. Generuje osobny plik TXT z hookiem, opisem TikTok, hashtagami i CTA dla każdego klipu.
-19. Pakuje pięć MP4 i pięć plików copy do jednego ZIP.
+7. Dla każdego kandydata tworzy 3 różne hooki na pierwsze 3 sekundy.
+8. Każdy hook dostaje własny `Hook Score 0–100`.
+9. Program automatycznie wybiera najwyżej oceniony hook i używa go przy liczeniu `Viral Score`.
+10. Domyślnie odrzuca fragmenty z `Viral Score` poniżej 55 jeszcze przed rankingiem TOP 5.
+11. Wybiera TOP 5 bez mocno nakładających się fragmentów.
+12. Wybrany hook trafia automatycznie do renderowanego MP4.
+13. Tworzy dynamiczne napisy.
+14. Wyróżnia aktualnie wypowiadane słowo.
+15. Wykrywa lokalnie twarz i robi delikatny punch-in/zoom w stronę dominującego mówcy.
+16. Jeśli twarz nie zostanie wykryta, stosuje delikatny zoom centralny.
+17. Wycina tylko dłuższe pauzy w mowie. Domyślny próg to 0,8 s.
+18. Zachowuje krótsze naturalne pauzy, żeby mowa nie brzmiała poszarpanie.
+19. Renderuje pion 1080×1920 z rozmytym tłem.
+20. Koduje H.264 + AAC + faststart.
+21. Generuje osobny plik TXT z hookiem, opisem TikTok, hashtagami i CTA dla każdego klipu.
+22. Pakuje pięć MP4 i pięć plików copy do jednego ZIP.
 
-## Scoring TikTok 3.2
+## Scoring TikTok 3.3
 
 Każdy kandydat dostaje pięć głównych ocen 0–100:
 
@@ -34,7 +37,7 @@ Każdy kandydat dostaje pięć głównych ocen 0–100:
 - `Comment Potential`
 - `Share Potential`
 
-`Viral Score` jest ich średnią. `Context Dependency` pozostaje osobnym wskaźnikiem. Im niższy, tym mniej dodatkowego kontekstu potrzebuje widz.
+`Viral Score` jest ich średnią. W 3.3 `Hook Score` pochodzi z najlepszego z trzech automatycznie przygotowanych hooków. `Context Dependency` pozostaje osobnym wskaźnikiem. Im niższy, tym mniej dodatkowego kontekstu potrzebuje widz.
 
 Progi robocze:
 
@@ -44,6 +47,18 @@ Progi robocze:
 - poniżej 55: `ODRZUĆ / PRZEMONTUJ`
 
 W aplikacji możesz zmienić minimalny próg albo wyłączyć filtrowanie, jeśli chcesz przejrzeć również słabsze propozycje.
+
+## Trzy hooki 3.3
+
+Dla każdego kandydata program przygotowuje trzy podejścia. Typowo są to:
+
+- cytat lub najmocniejsze zdanie źródłowe
+- wariant ciekawości
+- wariant napięcia lub kontrastu
+
+Każdy wariant jest oceniany pod kątem długości, czytelności, siły pierwszych sekund i zgodności z treścią źródłową. Najwyższy wynik zostaje automatycznie wybrany do filmu. Wszystkie trzy warianty wraz z wynikami trafiają do raportu JSON, CSV, Markdown oraz pliku TXT z copy.
+
+W trybie `Polityka / publicystyka` dodatkowo premiowana jest zgodność ze źródłem i neutralne sformułowanie.
 
 ## Jak działa wyróżnianie słów
 
@@ -112,7 +127,7 @@ ANALIZUJ I STWÓRZ TOP 5 KLIPÓW
 Po zakończeniu możesz pobrać każdy MP4 osobno, osobny TXT z opisem i hashtagami albo całą paczkę:
 
 ```text
-viral_top5_tiktok_3_2.zip
+viral_top5_tiktok_3_3.zip
 ```
 
 ## Co znajduje się w ZIP
@@ -135,7 +150,9 @@ clip_05_opis_hashtagi.txt
 Każdy plik TXT zawiera:
 
 ```text
-HOOK
+WYBRANY HOOK
+WYNIK HOOKA
+3 WARIANTY HOOKA
 OPIS TIKTOK
 HASHTAGI
 CTA
@@ -143,7 +160,7 @@ CTA
 
 ## CLI
 
-Domyślny montaż 3.2:
+Domyślny montaż 3.3:
 
 ```bash
 python cli.py "C:\\Filmy\\material.mp4"
@@ -187,7 +204,7 @@ W `output/` powstają:
 viral_report.md
 viral_report.json
 viral_ranking.csv
-viral_top5_tiktok_3_1.zip
+viral_top5_tiktok_3_3.zip
 clips/
   clip_01_..._tiktok.mp4
   clip_01_....ass

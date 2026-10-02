@@ -222,8 +222,12 @@ def _quality_label(viral_score: float) -> str:
     return "ODRZUĆ / PRZEMONTUJ"
 
 
-def _score(text: str, duration: float) -> tuple[float, float, float, float, float, float, float]:
-    hook = _hook_score(text)
+def _score(
+    text: str,
+    duration: float,
+    hook_override: float | None = None,
+) -> tuple[float, float, float, float, float, float, float]:
+    hook = _hook_score(text) if hook_override is None else _clamp(hook_override)
     emotion = _emotion_score(text)
     comments = _comment_potential(text)
     retention = _retention_score(text, duration)
@@ -241,18 +245,106 @@ def _truncate_words(text: str, max_words: int) -> str:
     return " ".join(words[:max_words]) + ("…" if len(words) > max_words else "")
 
 
-def _hook(text: str, public_affairs: bool) -> str:
-    quote = _strongest_sentence(text).strip()
+def _hook_variant_score(hook: str, source_text: str, public_affairs: bool) -> float:
+    hook = clean_text(hook)
+    low = hook.lower()
+    words = re.findall(r"\w+", low, flags=re.UNICODE)
+    source_words = {
+        w for w in re.findall(r"\w+", source_text.lower(), flags=re.UNICODE)
+        if len(w) > 3 and w not in STOPWORDS
+    }
+    hook_words = {
+        w for w in words
+        if len(w) > 3 and w not in STOPWORDS
+    }
+    overlap = len(source_words & hook_words) / max(1, len(hook_words))
+
+    score = 20.0 + _sentence_strength(hook) * 7
+    if 5 <= len(words) <= 14:
+        score += 25
+    elif 15 <= len(words) <= 18:
+        score += 14
+    elif len(words) > 22:
+        score -= 18
+    if "?" in hook:
+        score += 9
+    if any(marker in low for marker in SURPRISE_MARKERS):
+        score += 7
+    if re.search(r"\b\d+[\d.,%]*\b", hook):
+        score += 6
+    score += min(24.0, overlap * 24.0)
+
     if public_affairs:
-        return _truncate_words(quote, 14)
-    low = quote.lower()
-    if any(m in low for m in EMOTION_WORDS["konflikt"]):
-        return _truncate_words(f"Tu zaczyna się spór: {quote}", 16)
-    if "?" in quote or any(low.startswith(q) for q in QUESTION_MARKERS):
-        return _truncate_words(quote, 14)
-    if any(m in low for m in SURPRISE_MARKERS):
-        return _truncate_words(f"Tego zdania nie da się przeoczyć: {quote}", 16)
-    return _truncate_words(quote, 14)
+        # W publicystyce premiujemy zgodność ze źródłem bardziej niż emocjonalny framing.
+        score += min(18.0, overlap * 18.0)
+        if overlap < 0.35:
+            score -= 20
+        if any(marker in low for marker in {"szok", "skandal", "masakra", "bezczel", "kompromit"}):
+            score -= 18
+    return _clamp(score)
+
+
+def _hook_variants(text: str, public_affairs: bool) -> list[dict]:
+    quote = _strongest_sentence(text).strip()
+    direct = _truncate_words(quote, 14)
+
+    if public_affairs:
+        raw = [
+            ("cytat", direct),
+            ("kontekst", _truncate_words(f"Najważniejszy fragment wypowiedzi: {quote}", 16)),
+            ("analiza", _truncate_words(f"Co dokładnie wynika z tej wypowiedzi? {quote}", 16)),
+        ]
+    else:
+        low = quote.lower()
+        curiosity = (
+            direct
+            if "?" in quote or any(low.startswith(q) for q in QUESTION_MARKERS)
+            else _truncate_words(f"Co wydarzyło się w tym momencie? {quote}", 16)
+        )
+        tension = (
+            _truncate_words(f"Tu zaczyna się spór: {quote}", 16)
+            if any(m in low for m in EMOTION_WORDS["konflikt"])
+            else _truncate_words(f"Tego fragmentu nie da się przeoczyć: {quote}", 16)
+        )
+        raw = [
+            ("cytat", direct),
+            ("ciekawość", curiosity),
+            ("napięcie", tension),
+        ]
+
+    variants: list[dict] = []
+    seen: set[str] = set()
+    for kind, value in raw:
+        value = clean_text(value)
+        key = value.lower()
+        if not value or key in seen:
+            continue
+        seen.add(key)
+        variants.append({
+            "kind": kind,
+            "text": value,
+            "score": _hook_variant_score(value, text, public_affairs),
+        })
+
+    fallbacks = [
+        ("alternatywa", _truncate_words(f"Najmocniejszy moment: {quote}", 16)),
+        ("pytanie", _truncate_words(f"Co jest tu najważniejsze? {quote}", 16)),
+    ]
+    for kind, value in fallbacks:
+        if len(variants) >= 3:
+            break
+        value = clean_text(value)
+        if value.lower() in seen:
+            continue
+        seen.add(value.lower())
+        variants.append({
+            "kind": kind,
+            "text": value,
+            "score": _hook_variant_score(value, text, public_affairs),
+        })
+
+    variants.sort(key=lambda item: (-float(item["score"]), len(str(item["text"]))))
+    return variants[:3]
 
 
 def _screen_text(text: str) -> str:
@@ -332,7 +424,13 @@ def _build_candidate(window: list[TranscriptSegment], all_segments: list[Transcr
     text = clean_text(" ".join(s.text for s in window))
     public_affairs = content_mode == "public_affairs" or (content_mode == "auto" and _auto_public_affairs(text))
     quote = _strongest_sentence(text)
-    scores = _score(text, duration)
+    hook_variants = _hook_variants(text, public_affairs)
+    best_hook = hook_variants[0] if hook_variants else {
+        "kind": "cytat",
+        "text": _truncate_words(quote, 14),
+        "score": _hook_score(text),
+    }
+    scores = _score(text, duration, hook_override=float(best_hook["score"]))
     viral_score, hook_score, emotion_score, comment_potential, retention_score, share_potential, context_dependency = scores
     suggested = _suggested_length(duration, hook_score, context_dependency, retention_score)
     return ClipCandidate(
@@ -341,7 +439,7 @@ def _build_candidate(window: list[TranscriptSegment], all_segments: list[Transcr
         end=end,
         duration=duration,
         quote=quote,
-        hook=_hook(text, public_affairs),
+        hook=str(best_hook["text"]),
         screen_text=_screen_text(text),
         reason=_reason(text, duration, public_affairs, scores),
         viral_score=viral_score,
@@ -362,6 +460,8 @@ def _build_candidate(window: list[TranscriptSegment], all_segments: list[Transcr
         cta="Jak oceniasz ten argument na podstawie pełnej wypowiedzi?" if public_affairs else "Co o tym myślisz?",
         topic=_topic(text),
         text=text,
+        hook_variants=hook_variants,
+        selected_hook_score=float(best_hook["score"]),
     )
 
 
@@ -429,8 +529,9 @@ def enrich_with_ollama(candidates: list[ClipCandidate], model: str = "qwen3:8b",
             if public_affairs else "Nie wymyślaj faktów. Hook ma być mocny, ale zgodny z treścią."
         )
         prompt = f"""Jesteś montażystą krótkich form. {safety}
-Zwróć WYŁĄCZNIE poprawny JSON z polami: hook, screen_text, reason, emotion, description, hashtags, cta.
+Zwróć WYŁĄCZNIE poprawny JSON z polami: screen_text, reason, emotion, description, hashtags, cta.
 Hashtags ma być tablicą 5-7 elementów. screen_text maks. 10 słów. description maks. 2 krótkie zdania.
+Nie zmieniaj wybranego hooka. Viral Clip Studio 3.3 wybiera go osobnym scoringiem.
 Tekst fragmentu:\n{cand.text}\nNajmocniejszy cytat:\n{cand.quote}
 """
         try:
@@ -444,7 +545,6 @@ Tekst fragmentu:\n{cand.text}\nNajmocniejszy cytat:\n{cand.quote}
             tags = data.get("hashtags") if isinstance(data.get("hashtags"), list) else cand.hashtags
             updated.append(replace(
                 cand,
-                hook=clean_text(str(data.get("hook", cand.hook)))[:160],
                 screen_text=_truncate_words(str(data.get("screen_text", cand.screen_text)), 10),
                 reason=clean_text(str(data.get("reason", cand.reason)))[:420],
                 emotion=clean_text(str(data.get("emotion", cand.emotion)))[:40],

@@ -36,7 +36,18 @@ def render_markdown(candidates: list[ClipCandidate]) -> str:
             f"**DŁUGOŚĆ MATERIAŁU:** {clip.duration:.1f} s", "",
             f"**REKOMENDOWANA DŁUGOŚĆ KLIPU:** {clip.suggested_length} s", "",
             f"**CYTAT / NAJMOCNIEJSZE ZDANIE:** {clip.quote}", "",
-            f"**HOOK NA PIERWSZE 3 SEKUNDY:** {clip.hook}", "",
+            f"**WYBRANY HOOK NA PIERWSZE 3 SEKUNDY:** {clip.hook}", "",
+            f"**HOOK SCORE WYBRANEGO WARIANTU:** {clip.selected_hook_score:.0f}/100", "",
+            "**3 WARIANTY HOOKA:**",
+        ])
+        for idx, item in enumerate(clip.hook_variants, start=1):
+            marker = " ← WYBRANY" if item.get("text") == clip.hook else ""
+            lines.append(
+                f"- Wariant {idx} [{item.get('kind', 'hook')}]: "
+                f"{item.get('score', 0):.0f}/100 — {item.get('text', '')}{marker}"
+            )
+        lines.extend([
+            "",
             f"**TEKST NA EKRAN:** {clip.screen_text}", "",
             f"**VIRAL SCORE:** {clip.viral_score}/100", "",
             f"**HOOK SCORE:** {clip.hook_score}/100", "",
@@ -94,14 +105,16 @@ def save_reports(candidates: list[ClipCandidate], output_dir: str | Path) -> dic
     with csv_path.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f)
         writer.writerow([
-            "ranking", "start", "end", "duration", "suggested_length", "topic", "hook", "screen_text",
-            "viral_score", "hook_score", "emotion_score", "comment_potential", "retention_score", "share_potential",
-            "context_dependency", "quality_label",
+            "ranking", "start", "end", "duration", "suggested_length", "topic", "hook", "selected_hook_score",
+            "hook_variants", "screen_text", "viral_score", "hook_score", "emotion_score", "comment_potential",
+            "retention_score", "share_potential", "context_dependency", "quality_label",
         ])
         for c in candidates:
             writer.writerow([
                 c.rank, format_time(c.start), format_time(c.end), round(c.duration, 1), c.suggested_length,
-                c.topic, c.hook, c.screen_text, c.viral_score, c.hook_score, c.emotion_score,
+                c.topic, c.hook, c.selected_hook_score,
+                " || ".join(f"{item.get('kind', 'hook')}:{item.get('score', 0):.0f}:{item.get('text', '')}" for item in c.hook_variants),
+                c.screen_text, c.viral_score, c.hook_score, c.emotion_score,
                 c.comment_potential, c.retention_score, c.share_potential, c.context_dependency, c.quality_label,
             ])
 

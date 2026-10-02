@@ -19,11 +19,11 @@ from viralclip import (
     write_top5_copy,
 )
 
-st.set_page_config(page_title="Viral Clip Studio 3.1", layout="wide")
-st.title("Viral Clip Studio 3.1")
+st.set_page_config(page_title="Viral Clip Studio 3.2", layout="wide")
+st.title("Viral Clip Studio 3.2")
 st.caption(
-    "Wrzucasz film. Program wybiera TOP 5, usuwa dłuższe cisze, robi auto-zoom na twarz, "
-    "wyróżnia aktualne słowo i tworzy gotowe MP4 + opisy i hashtagi."
+    "Wrzucasz film. Program ocenia hook, retencję, emocję, komentarze i potencjał udostępnień, "
+    "odrzuca słabe fragmenty i tworzy TOP 5 gotowe do montażu."
 )
 
 
@@ -49,7 +49,19 @@ with st.sidebar:
     )
     content_mode = {"Auto": "auto", "Ogólny": "general", "Polityka / publicystyka": "public_affairs"}[content_label]
 
-    st.subheader("Montaż 3.1")
+    st.subheader("Scoring TikTok 3.2")
+    reject_weak = st.checkbox("Odrzucaj słabe fragmenty przed TOP 5", value=True)
+    min_viral_score = st.slider(
+        "Minimalny Viral Score",
+        min_value=40,
+        max_value=85,
+        value=55,
+        step=1,
+        disabled=not reject_weak,
+        help="85+: publikuj najpierw, 70–84: dobry materiał, 55–69: popraw hook lub skróć, poniżej 55: odrzuć / przemontuj.",
+    )
+
+    st.subheader("Montaż 3.2")
     show_hook = st.checkbox("Hook przez pierwsze 3 sekundy", value=True)
     dynamic_subtitles = st.checkbox("Dynamiczne napisy", value=True)
     highlight_words = st.checkbox("Wyróżniaj aktualnie wypowiadane słowo", value=True, disabled=not dynamic_subtitles)
@@ -97,7 +109,18 @@ if uploaded:
             progress.progress(57)
             status.write(f"Ocena viralowa. Wykryty język: {detected or language}")
 
-            candidates = analyze_segments(segments, top_n=10, content_mode=content_mode)
+            candidates = analyze_segments(
+                segments,
+                top_n=10,
+                content_mode=content_mode,
+                min_viral_score=float(min_viral_score),
+                include_weak=not reject_weak,
+            )
+            if not candidates:
+                progress.progress(100)
+                status.warning("Brak fragmentów spełniających ustawiony próg. Obniż Minimalny Viral Score albo wyłącz odrzucanie słabych fragmentów.")
+                st.stop()
+
             if use_ollama:
                 status.write("Ulepszanie hooków i opisów przez lokalny Ollama")
                 candidates = enrich_with_ollama(candidates, model=ollama_model, content_mode=content_mode)
@@ -109,7 +132,7 @@ if uploaded:
             rendered = []
             top5 = candidates[:5]
             for idx, clip in enumerate(top5, start=1):
-                status.write(f"Montaż 3.1: klip {idx}/{len(top5)}")
+                status.write(f"Montaż 3.2: klip {idx}/{len(top5)}")
                 rendered.extend(
                     render_top_clips(
                         video_path,
@@ -131,7 +154,7 @@ if uploaded:
             copy_files = write_top5_copy(top5, output_root / "copy", count=5)
             zip_path = package_clips(
                 rendered,
-                output_root / "viral_top5_tiktok_3_1.zip",
+                output_root / "viral_top5_tiktok_3_2.zip",
                 extra_files=copy_files,
             )
 
@@ -142,7 +165,7 @@ if uploaded:
             st.session_state["copy_files"] = [str(p) for p in copy_files]
             st.session_state["zip_path"] = str(zip_path)
             progress.progress(100)
-            status.success("Gotowe. TOP 5 ma montaż 3.1, napisy, copy i paczkę ZIP.")
+            status.success("Gotowe. TOP 5 przeszło scoring 3.2 i ma napisy, copy oraz paczkę ZIP.")
         except Exception as exc:
             st.exception(exc)
 
@@ -162,26 +185,30 @@ if st.session_state.get("candidates"):
             "Emocja": round(c.emotion_score),
             "Komentarze": round(c.comment_potential),
             "Retencja": round(c.retention_score),
+            "Udostępnienia": round(c.share_potential),
             "Kontekst": round(c.context_dependency),
+            "Status": c.quality_label,
             "Tekst na ekran": c.screen_text,
         }
         for c in candidates[:5]
     ])
     st.dataframe(table, use_container_width=True, hide_index=True)
-    st.caption("Kontekst: niższy wynik jest lepszy. Pozostałe wskaźniki: wyższy wynik jest lepszy.")
+    st.caption("Progi: 85+ publikuj najpierw, 70–84 dobry materiał, 55–69 popraw hook lub skróć. Kontekst: niższy wynik jest lepszy.")
 
     for c in candidates[:5]:
         with st.expander(
             f"#{c.rank}  {format_time(c.start)}-{format_time(c.end)} | Viral {c.viral_score:.0f}/100",
             expanded=c.rank == 1,
         ):
-            m1, m2, m3, m4, m5, m6 = st.columns(6)
+            m1, m2, m3, m4, m5, m6, m7 = st.columns(7)
             m1.metric("Viral", f"{c.viral_score:.0f}/100")
             m2.metric("Hook", f"{c.hook_score:.0f}/100")
             m3.metric("Emocja", f"{c.emotion_score:.0f}/100")
             m4.metric("Komentarze", f"{c.comment_potential:.0f}/100")
             m5.metric("Retencja", f"{c.retention_score:.0f}/100")
-            m6.metric("Kontekst", f"{c.context_dependency:.0f}/100")
+            m6.metric("Udostępnienia", f"{c.share_potential:.0f}/100")
+            m7.metric("Kontekst", f"{c.context_dependency:.0f}/100")
+            st.markdown(f"**Status:** {c.quality_label}")
             st.markdown(f"**Hook 0–3 s:** {c.hook}")
             st.markdown(f"**Tekst na ekran:** {c.screen_text}")
             st.markdown(f"**Najmocniejszy cytat:** {c.quote}")
@@ -244,7 +271,7 @@ if st.session_state.get("zip_path"):
         st.download_button(
             "POBIERZ TOP 5 + OPISY I HASHTAGI JAKO ZIP",
             zip_path.read_bytes(),
-            file_name="viral_top5_tiktok_3_1.zip",
+            file_name="viral_top5_tiktok_3_2.zip",
             mime="application/zip",
             type="primary",
             use_container_width=True,

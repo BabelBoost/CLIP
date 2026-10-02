@@ -53,7 +53,7 @@ def test_public_affairs_hook_uses_source_wording():
         TranscriptSegment(8, 16, "Poseł odpowiedział, że to nieprawda i podał inny termin."),
         TranscriptSegment(16, 24, "Spór dotyczy więc konkretnej daty wejścia ustawy w życie."),
     ]
-    clips = analyze_segments(segs, top_n=1, content_mode="public_affairs")
+    clips = analyze_segments(segs, top_n=1, content_mode="public_affairs", include_weak=True)
     assert clips
     assert "Tu zaczyna się spór" not in clips[0].hook
 

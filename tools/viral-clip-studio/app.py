@@ -86,7 +86,7 @@ with st.sidebar:
 uploaded = st.file_uploader("Wybierz plik wideo", type=["mp4", "mov", "mkv", "webm", "m4v"])
 
 if uploaded:
-    workspace = Path(tempfile.mkdtemp(prefix="viral_clip_studio_3_1_"))
+    workspace = Path(tempfile.mkdtemp(prefix="viral_clip_studio_3_2_"))
     video_path = workspace / uploaded.name
     video_path.write_bytes(uploaded.getbuffer())
     st.video(str(video_path))

@@ -43,7 +43,9 @@ def render_markdown(candidates: list[ClipCandidate]) -> str:
             f"**EMOTION SCORE:** {clip.emotion_score}/100", "",
             f"**COMMENT POTENTIAL:** {clip.comment_potential}/100", "",
             f"**RETENTION SCORE:** {clip.retention_score}/100", "",
+            f"**SHARE POTENTIAL:** {clip.share_potential}/100", "",
             f"**CONTEXT DEPENDENCY:** {clip.context_dependency}/100", "",
+            f"**STATUS:** {clip.quality_label}", "",
             f"**EMOCJA:** {clip.emotion}", "",
             f"**DLACZEGO TEN FRAGMENT MA POTENCJAŁ:** {clip.reason}", "",
             f"**SUGEROWANE CIĘCIE:** {clip.cut_before} {clip.cut_after}", "",
@@ -60,14 +62,14 @@ def render_markdown(candidates: list[ClipCandidate]) -> str:
 
     lines.extend([
         "## Ranking", "",
-        "| # | Timecode | Długość | Viral | Hook | Emocja | Komentarze | Retencja | Kontekst |",
-        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| # | Timecode | Długość | Viral | Hook | Emocja | Komentarze | Retencja | Udost. | Kontekst | Status |",
+        "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ])
     for c in candidates[:5]:
         lines.append(
             f"| {c.rank} | {format_time(c.start)}–{format_time(c.end)} | {c.suggested_length}s | "
             f"{c.viral_score:.0f} | {c.hook_score:.0f} | {c.emotion_score:.0f} | {c.comment_potential:.0f} | "
-            f"{c.retention_score:.0f} | {c.context_dependency:.0f} |"
+            f"{c.retention_score:.0f} | {c.share_potential:.0f} | {c.context_dependency:.0f} | {c.quality_label} |"
         )
 
     best = candidates[0]
@@ -93,13 +95,14 @@ def save_reports(candidates: list[ClipCandidate], output_dir: str | Path) -> dic
         writer = csv.writer(f)
         writer.writerow([
             "ranking", "start", "end", "duration", "suggested_length", "topic", "hook", "screen_text",
-            "viral_score", "hook_score", "emotion_score", "comment_potential", "retention_score", "context_dependency",
+            "viral_score", "hook_score", "emotion_score", "comment_potential", "retention_score", "share_potential",
+            "context_dependency", "quality_label",
         ])
         for c in candidates:
             writer.writerow([
                 c.rank, format_time(c.start), format_time(c.end), round(c.duration, 1), c.suggested_length,
                 c.topic, c.hook, c.screen_text, c.viral_score, c.hook_score, c.emotion_score,
-                c.comment_potential, c.retention_score, c.context_dependency,
+                c.comment_potential, c.retention_score, c.share_potential, c.context_dependency, c.quality_label,
             ])
 
     return {"markdown": md, "json": js, "csv": csv_path}

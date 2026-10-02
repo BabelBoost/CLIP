@@ -45,6 +45,12 @@ def test_detailed_scores_are_in_range():
     }
     assert clip.hook
     assert clip.screen_text
+    assert len(clip.hook_variants) == 3
+    assert clip.hook == clip.hook_variants[0]["text"]
+    assert clip.selected_hook_score == clip.hook_variants[0]["score"]
+    assert clip.hook_score == clip.selected_hook_score
+    assert clip.hook_variants[0]["score"] >= clip.hook_variants[-1]["score"]
+    assert len({item["text"] for item in clip.hook_variants}) == 3
 
 
 def test_public_affairs_hook_uses_source_wording():
@@ -56,6 +62,8 @@ def test_public_affairs_hook_uses_source_wording():
     clips = analyze_segments(segs, top_n=1, content_mode="public_affairs", include_weak=True)
     assert clips
     assert "Tu zaczyna się spór" not in clips[0].hook
+    assert len(clips[0].hook_variants) == 3
+    assert all("skandal" not in item["text"].lower() for item in clips[0].hook_variants)
 
 
 def test_weak_candidates_can_be_filtered_or_inspected():

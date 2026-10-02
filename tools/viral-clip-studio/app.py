@@ -19,11 +19,11 @@ from viralclip import (
     write_top5_copy,
 )
 
-st.set_page_config(page_title="Viral Clip Studio 3.2", layout="wide")
-st.title("Viral Clip Studio 3.2")
+st.set_page_config(page_title="Viral Clip Studio 3.3", layout="wide")
+st.title("Viral Clip Studio 3.3")
 st.caption(
-    "Wrzucasz film. Program ocenia hook, retencję, emocję, komentarze i potencjał udostępnień, "
-    "odrzuca słabe fragmenty i tworzy TOP 5 gotowe do montażu."
+    "Wrzucasz film. Program tworzy 3 hooki dla każdego fragmentu, ocenia je osobno, "
+    "wybiera najlepszy i dopiero wtedy liczy Viral Score oraz tworzy TOP 5."
 )
 
 
@@ -49,7 +49,7 @@ with st.sidebar:
     )
     content_mode = {"Auto": "auto", "Ogólny": "general", "Polityka / publicystyka": "public_affairs"}[content_label]
 
-    st.subheader("Scoring TikTok 3.2")
+    st.subheader("Scoring TikTok 3.3")
     reject_weak = st.checkbox("Odrzucaj słabe fragmenty przed TOP 5", value=True)
     min_viral_score = st.slider(
         "Minimalny Viral Score",
@@ -61,7 +61,7 @@ with st.sidebar:
         help="85+: publikuj najpierw, 70–84: dobry materiał, 55–69: popraw hook lub skróć, poniżej 55: odrzuć / przemontuj.",
     )
 
-    st.subheader("Montaż 3.2")
+    st.subheader("Montaż 3.3")
     show_hook = st.checkbox("Hook przez pierwsze 3 sekundy", value=True)
     dynamic_subtitles = st.checkbox("Dynamiczne napisy", value=True)
     highlight_words = st.checkbox("Wyróżniaj aktualnie wypowiadane słowo", value=True, disabled=not dynamic_subtitles)
@@ -86,7 +86,7 @@ with st.sidebar:
 uploaded = st.file_uploader("Wybierz plik wideo", type=["mp4", "mov", "mkv", "webm", "m4v"])
 
 if uploaded:
-    workspace = Path(tempfile.mkdtemp(prefix="viral_clip_studio_3_2_"))
+    workspace = Path(tempfile.mkdtemp(prefix="viral_clip_studio_3_3_"))
     video_path = workspace / uploaded.name
     video_path.write_bytes(uploaded.getbuffer())
     st.video(str(video_path))
@@ -122,7 +122,7 @@ if uploaded:
                 st.stop()
 
             if use_ollama:
-                status.write("Ulepszanie hooków i opisów przez lokalny Ollama")
+                status.write("Ulepszanie opisu, napisów i CTA przez lokalny Ollama")
                 candidates = enrich_with_ollama(candidates, model=ollama_model, content_mode=content_mode)
 
             output_root = workspace / "output"
@@ -132,7 +132,7 @@ if uploaded:
             rendered = []
             top5 = candidates[:5]
             for idx, clip in enumerate(top5, start=1):
-                status.write(f"Montaż 3.2: klip {idx}/{len(top5)}")
+                status.write(f"Montaż 3.3: klip {idx}/{len(top5)}")
                 rendered.extend(
                     render_top_clips(
                         video_path,
@@ -154,7 +154,7 @@ if uploaded:
             copy_files = write_top5_copy(top5, output_root / "copy", count=5)
             zip_path = package_clips(
                 rendered,
-                output_root / "viral_top5_tiktok_3_2.zip",
+                output_root / "viral_top5_tiktok_3_3.zip",
                 extra_files=copy_files,
             )
 
@@ -165,7 +165,7 @@ if uploaded:
             st.session_state["copy_files"] = [str(p) for p in copy_files]
             st.session_state["zip_path"] = str(zip_path)
             progress.progress(100)
-            status.success("Gotowe. TOP 5 przeszło scoring 3.2 i ma napisy, copy oraz paczkę ZIP.")
+            status.success("Gotowe. Dla każdego klipu wybrano najlepszy z 3 hooków. TOP 5 ma napisy, copy i paczkę ZIP.")
         except Exception as exc:
             st.exception(exc)
 
@@ -182,6 +182,7 @@ if st.session_state.get("candidates"):
             "Długość źródła": f"{c.duration:.1f}s",
             "Viral": round(c.viral_score),
             "Hook": round(c.hook_score),
+            "Wybrany hook": c.hook,
             "Emocja": round(c.emotion_score),
             "Komentarze": round(c.comment_potential),
             "Retencja": round(c.retention_score),
@@ -209,7 +210,15 @@ if st.session_state.get("candidates"):
             m6.metric("Udostępnienia", f"{c.share_potential:.0f}/100")
             m7.metric("Kontekst", f"{c.context_dependency:.0f}/100")
             st.markdown(f"**Status:** {c.quality_label}")
-            st.markdown(f"**Hook 0–3 s:** {c.hook}")
+            st.markdown(f"**Wybrany hook 0–3 s:** {c.hook}")
+            st.markdown(f"**Wynik wybranego hooka:** {c.selected_hook_score:.0f}/100")
+            st.markdown("**3 warianty hooka:**")
+            for idx, item in enumerate(c.hook_variants, start=1):
+                selected = "  ← wybrany" if item.get("text") == c.hook else ""
+                st.markdown(
+                    f"{idx}. **{item.get('kind', 'hook')}** — {item.get('score', 0):.0f}/100: "
+                    f"{item.get('text', '')}{selected}"
+                )
             st.markdown(f"**Tekst na ekran:** {c.screen_text}")
             st.markdown(f"**Najmocniejszy cytat:** {c.quote}")
             st.markdown(f"**Emocja:** {c.emotion}")
@@ -271,7 +280,7 @@ if st.session_state.get("zip_path"):
         st.download_button(
             "POBIERZ TOP 5 + OPISY I HASHTAGI JAKO ZIP",
             zip_path.read_bytes(),
-            file_name="viral_top5_tiktok_3_2.zip",
+            file_name="viral_top5_tiktok_3_3.zip",
             mime="application/zip",
             type="primary",
             use_container_width=True,

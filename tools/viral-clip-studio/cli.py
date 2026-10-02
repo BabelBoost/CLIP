@@ -80,7 +80,7 @@ def main() -> None:
         print(f"Copy: {path}")
 
     if rendered:
-        zip_path = package_clips(rendered, out / "viral_top5_tiktok_3_2.zip", extra_files=copy_files)
+        zip_path = package_clips(rendered, out / "viral_top5_tiktok_3_3.zip", extra_files=copy_files)
         print(f"ZIP: {zip_path}")
 
 

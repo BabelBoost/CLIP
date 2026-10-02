@@ -44,6 +44,12 @@ def sample_clip() -> ClipCandidate:
         cta="Co o tym myślisz?",
         topic="test",
         text="Pełny tekst fragmentu",
+        hook_variants=[
+            {"kind": "pytanie", "text": "Czy naprawdę to powiedział?", "score": 91},
+            {"kind": "cytat", "text": "To jest najmocniejsze zdanie.", "score": 84},
+            {"kind": "ciekawość", "text": "Co wydarzyło się dalej?", "score": 76},
+        ],
+        selected_hook_score=91,
     )
 
 
@@ -132,6 +138,9 @@ def test_remap_words_closes_removed_gap():
 def test_social_copy_contains_description_hashtags_and_cta(tmp_path: Path):
     target = write_social_copy(sample_clip(), tmp_path / "copy.txt")
     content = target.read_text(encoding="utf-8")
+    assert "3 WARIANTY HOOKA" in content
+    assert "WYNIK HOOKA: 91/100" in content
+    assert "<- WYBRANY" in content
     assert "OPIS TIKTOK" in content
     assert "Opis do publikacji" in content
     assert "#tiktok #test" in content

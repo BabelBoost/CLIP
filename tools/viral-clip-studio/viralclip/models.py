@@ -43,6 +43,8 @@ class ClipCandidate:
     cta: str
     topic: str
     text: str
+    hook_variants: list[dict[str, Any]] = field(default_factory=list)
+    selected_hook_score: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

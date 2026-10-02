@@ -523,8 +523,15 @@ def write_social_copy(clip: ClipCandidate, path: str | Path) -> Path:
     content = (
         f"KLIP #{clip.rank}\n"
         f"Źródło: {clip.start:.1f}s–{clip.end:.1f}s\n\n"
-        f"HOOK:\n{clip.hook}\n\n"
-        f"OPIS TIKTOK:\n{clip.tiktok_description}\n\n"
+        f"WYBRANY HOOK:\n{clip.hook}\n"
+        f"WYNIK HOOKA: {clip.selected_hook_score:.0f}/100\n\n"
+        f"3 WARIANTY HOOKA:\n"
+        + "\n".join(
+            f"{idx}. [{item.get('kind', 'hook')}] {item.get('score', 0):.0f}/100 — {item.get('text', '')}"
+            + ("  <- WYBRANY" if item.get("text") == clip.hook else "")
+            for idx, item in enumerate(clip.hook_variants, start=1)
+        )
+        + f"\n\nOPIS TIKTOK:\n{clip.tiktok_description}\n\n"
         f"HASHTAGI:\n{' '.join(clip.hashtags)}\n\n"
         f"CTA:\n{clip.cta}\n"
     )

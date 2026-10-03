@@ -19,6 +19,8 @@ templates/
 tools/
   video-downloader/
   viral-clip-studio/
+  iceland-shorts-studio/
+  autoshorts-analyzer/
 archive/
 ```
 
@@ -76,12 +78,45 @@ Generuje:
 - zsynchronizowane napisy
 - opis, hashtagi i CTA
 - tabelę TOP 5
-- plan montażu najlepszego klipu sekunda po sekundzie
+- plan montażu najlepszzego klipu sekunda po sekundzie
 - pionowe MP4 1080×1920 z napisami
 
 Dla polityki i publicystyki dostępny jest neutralny tryb zachowujący sens oraz kontekst wypowiedzi.
 
 Kod i instrukcja: `tools/viral-clip-studio/`
+
+### AutoShorts Analyzer
+
+Generator angielskich promptów do AutoShorts.ai dla:
+
+- TikTok
+- YouTube Shorts
+- X
+- Facebook Reels
+
+Może działać bez danych historycznych albo analizować CSV z wynikami poprzednich filmów. Oblicza heurystyczny `Viral Score 0–100`, wykrywa najlepszy wzorzec tematu i hooka, a następnie generuje nowe warianty bez kopiowania zwycięskiego filmu.
+
+Analizowane sygnały:
+
+- średni procent obejrzenia
+- engagement rate
+- wyświetlenia względem własnej próbki
+- udostępnienia na 1000 wyświetleń
+- komentarze na 1000 wyświetleń
+- subskrypcje na 1000 wyświetleń
+
+Każdy prompt zawiera:
+
+- platformę i cel filmu
+- hook na 0–2 sekundy
+- strukturę historii
+- tempo i zmiany wizualne
+- wskazówki do napisów
+- CTA lub pytanie końcowe
+- reguły dokładności faktów
+- docelową długość dopasowaną do platformy
+
+Kod i instrukcja: `tools/autoshorts-analyzer/`
 
 ## Zasada pracy
 

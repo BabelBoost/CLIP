@@ -1,0 +1,30 @@
+{
+  "TikTok": {
+    "target_seconds": "20-35",
+    "primary_goal": "stop the scroll, maximize completion, comments and shares",
+    "hook": "a bold curiosity gap, surprising mistake, strong contrast or immediate consequence",
+    "pacing": "very fast; introduce a visual or information change every 2-3 seconds",
+    "ending": "finish with a short opinion question or practical challenge"
+  },
+  "YouTube Shorts": {
+    "target_seconds": "25-40",
+    "primary_goal": "maximize engaged views, completion, rewatches and subscriber conversion",
+    "hook": "open with the payoff tension immediately, but do not reveal the answer",
+    "pacing": "fast and clear; one idea per short with a reveal every 3-5 seconds",
+    "ending": "deliver a satisfying payoff, then one natural question or follow-up tease"
+  },
+  "X": {
+    "target_seconds": "15-30",
+    "primary_goal": "make the point understandable instantly and encourage replies or reposts",
+    "hook": "state the surprising claim or tension in the first sentence",
+    "pacing": "compact, context-first, no filler",
+    "ending": "end with a concise question that invites a response"
+  },
+  "Facebook Reels": {
+    "target_seconds": "25-45",
+    "primary_goal": "maximize watch-through, shares and useful takeaways",
+    "hook": "start with a relatable problem, warning, surprise or practical benefit",
+    "pacing": "clear and energetic; keep captions easy to read and avoid overloading the viewer",
+    "ending": "finish with a useful takeaway and a share-friendly question"
+  }
+}

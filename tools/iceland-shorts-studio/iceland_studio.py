@@ -260,13 +260,19 @@ def _ass_time(seconds: float) -> str:
 def _escape_ass(text: str) -> str:
     text = text.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
     keywords = ["ICELAND", "TOURISTS", "DON'T", "WARNING", "ROAD", "WINTER", "MISTAKE", "RIGHT"]
+
     for kw in keywords:
-        text = re.sub(
-            rf"\b({re.escape(kw)})\b",
-            r"{\c&H00FFFF&\b1}\1{\c&HFFFFFF&\b1}",
-            text,
-            flags=re.I,
-        )
+        pattern = re.compile(rf"\b({re.escape(kw)})\b", flags=re.I)
+
+        def highlight(match: re.Match[str]) -> str:
+            return (
+                r"{\c&H00FFFF&\b1}"
+                + match.group(1)
+                + r"{\c&HFFFFFF&\b1}"
+            )
+
+        text = pattern.sub(highlight, text)
+
     return text
 
 

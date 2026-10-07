@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -424,7 +425,5 @@ class VideoCompressorApp(tk.Tk):
 
 
 if __name__ == "__main__":
-    import sys
-
     app = VideoCompressorApp()
     app.mainloop()

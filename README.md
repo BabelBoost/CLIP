@@ -114,3 +114,9 @@ Przykład:
 ```
 
 Nie przechowuj tu haseł, tokenów API, plików cookies ani danych logowania.
+
+### Babel Boost Ad Studio
+
+Montaż pobranych klipów z Grok AI i AutoShorts.ai: kolejność i przycinanie ujęć, hook, napisy SRT, muzyka, import lektora, okładka oraz plansza z CTA. Eksport MP4 w pionie, poziomie lub kwadracie. Polski interfejs lokalny i launcher Windows.
+
+Kod i instrukcja: [tools/ad-studio/](tools/ad-studio/).

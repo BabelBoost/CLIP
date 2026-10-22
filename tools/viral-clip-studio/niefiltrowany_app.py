@@ -32,6 +32,8 @@ def short_quote(text: str, words: int = 8) -> str:
 def quote_start(clip, segments) -> float | None:
     target = " ".join(clip.quote.lower().split()).strip(" .,!?:;\"'„”")
     for seg in segments:
+        if seg.end < clip.start or seg.start > clip.end:
+            continue
         value = " ".join(seg.text.lower().split()).strip(" .,!?:;\"'„”")
         if target and target in value:
             return float(seg.start)

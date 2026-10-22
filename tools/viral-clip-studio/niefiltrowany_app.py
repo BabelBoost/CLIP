@@ -10,7 +10,7 @@ from viralclip import analyze_segments, format_time, transcribe_video
 from viralclip.evaluator import evaluate_candidates
 
 
-st.set_page_config(page_title="Niefiltrowany | TikTok Clip Finder", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Niefiltrowany | TikTok Clip Finder", layout="wide")
 st.title("Niefiltrowany | TikTok Clip Finder")
 st.caption("Znajdź mocne, samodzielne fragmenty 20–35 sekund z własnego filmu lub linku YouTube.")
 st.info("Cytaty i timecode’y pochodzą z lokalnej transkrypcji Whisper. Hooki, komentarz i opis są propozycjami redakcyjnymi. Sprawdź transkrypcję przed publikacją.")
@@ -188,7 +188,8 @@ if results:
             if len(subtitle_lines) > 12:
                 st.caption("Pozostałe linie napisów są w transkrypcji źródłowej.")
 
-            st.markdown("**Komentarz (propozycja, oddzielona od cytatu):** Moim zdaniem tę wypowiedź trzeba ocenić w pełnym kontekście.")
+            comment = f"Moim zdaniem najmocniej wybrzmiewa tu zdanie: „{short_quote(clip['quote'], 12)}”."
+            st.markdown(f"**Komentarz (propozycja, oddzielona od cytatu):** {comment}")
             st.markdown(f"**Opis:** Fragment wypowiedzi: „{short_quote(clip['quote'], 15)}”. Jak oceniasz tę argumentację po poznaniu pełnego kontekstu?")
             st.markdown("**Hashtagi:** #niefiltrowanypl #publicystyka #polityka #komentarz")
 
@@ -197,7 +198,7 @@ if results:
                 f"Temat: {clip['topic']}",
                 f"Cytat źródłowy: {clip['quote']}",
                 "Hooki: " + " | ".join(text for _, text in hooks),
-                "Komentarz: Moim zdaniem tę wypowiedź trzeba ocenić w pełnym kontekście.",
+                f"Komentarz: {comment}",
                 f"Opis: Fragment wypowiedzi: {short_quote(clip['quote'], 15)}. Jak oceniasz tę argumentację po poznaniu pełnego kontekstu?",
                 "Hashtagi: #niefiltrowanypl #publicystyka #polityka #komentarz",
                 "Napisy:",

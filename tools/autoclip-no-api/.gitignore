@@ -1,0 +1,6 @@
+.venv/
+exports/
+__pycache__/
+*.pyc
+stock/*
+!stock/README.txt

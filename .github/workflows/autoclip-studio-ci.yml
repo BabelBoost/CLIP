@@ -24,3 +24,13 @@ jobs:
       - name: Unit and render smoke tests
         working-directory: tools/prompt-stock-studio
         run: python -m unittest discover -s tests -v
+      - name: Package Windows ZIP
+        run: |
+          cd tools/prompt-stock-studio
+          zip -r ../../BabelBoost-AutoClip-Studio-Windows.zip . -x '*.pyc' '*/__pycache__/*' 'exports/*'
+      - name: Upload Windows app ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: BabelBoost-AutoClip-Studio-Windows
+          path: BabelBoost-AutoClip-Studio-Windows.zip
+          retention-days: 90

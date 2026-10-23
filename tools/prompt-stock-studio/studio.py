@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import requests
 from PIL import Image, ImageDraw, ImageFont
 from mutagen.mp3 import MP3
+from stock_providers import StockSearchError, search_pixabay
 
 
 PEXELS_API = "https://api.pexels.com/v1"
@@ -182,18 +183,54 @@ def search_media(query: str, key: str, format_name: str, preference: str, seen: 
     raise StudioError("Nie znaleziono materiału Pexels dla frazy: " + query + ". Zmień wyszukiwanie sceny.")
 
 
+def search_stock(query: str, pexels_key: str, pixabay_key: str, format_name: str,
+                 preference: str, seen: set, source: str = "Auto") -> dict:
+    """Choose suitable stock from Pexels/Pixabay without silently fabricating visuals."""
+    if not (pexels_key or pixabay_key):
+        raise StudioError("Podaj klucz Pexels lub Pixabay.")
+    if preference == "Grafiki i ilustracje" and not pixabay_key:
+        raise StudioError("Grafiki i ilustracje wymagają klucza Pixabay API.")
+    providers = (["Pixabay"] if preference == "Grafiki i ilustracje" else
+                 ["Pexels", "Pixabay"] if source == "Auto" else [source])
+    for provider in providers:
+        if provider == "Pexels" and pexels_key:
+            try:
+                result = search_media(query, pexels_key, format_name, preference, seen)
+                result["provider"] = "Pexels"
+                return result
+            except StudioError as exc:
+                if not str(exc).startswith("Nie znaleziono materiału Pexels"):
+                    raise
+        if provider == "Pixabay" and pixabay_key:
+            try:
+                result = search_pixabay(query, pixabay_key, format_name, preference, seen,
+                                        Path(__file__).resolve().parent / ".cache" / "pixabay")
+            except StockSearchError as exc:
+                raise StudioError(str(exc)) from exc
+            if result:
+                return result
+    raise StudioError("Brak pasujących materiałów Pexels/Pixabay dla: " + query +
+                      ". Zmień frazę sceny lub bibliotekę.")
+
+
+def _allowed_stock_host(host: str) -> bool:
+    return host in {"pexels.com", "pixabay.com"} or any(
+        host.endswith("." + suffix) for suffix in ("pexels.com", "pixabay.com", "pixabaycdn.com")
+    )
+
+
 def _safe_download(url: str, path: Path) -> None:
     parsed = urlparse(url)
     hostname = (parsed.hostname or "").lower()
-    if parsed.scheme != "https" or not (hostname == "pexels.com" or hostname.endswith(".pexels.com")):
-        raise StudioError("Niedozwolony adres pobierania mediów. Wymagany link Pexels HTTPS.")
+    if parsed.scheme != "https" or not _allowed_stock_host(hostname):
+        raise StudioError("Niedozwolony adres stock. Wymagany link HTTPS Pexels lub Pixabay.")
     try:
         with requests.get(url, timeout=(12, 90), stream=True, allow_redirects=True) as res:
             res.raise_for_status()
             final = urlparse(res.url)
             host = (final.hostname or "").lower()
-            if final.scheme != "https" or not (host == "pexels.com" or host.endswith(".pexels.com")):
-                raise StudioError("Materiał przekierowuje poza domenę Pexels.")
+            if final.scheme != "https" or not _allowed_stock_host(host):
+                raise StudioError("Materiał przekierowuje poza dozwolone domeny stock.")
             if int(res.headers.get("Content-Length", 0)) > MAX_BYTES:
                 raise StudioError("Plik stock jest zbyt duży (limit 150 MB).")
             n = 0
@@ -312,13 +349,14 @@ def _durations(scenes: list, requested: int, audio_duration: float) -> list[floa
 def create_video(plan: dict, *, pexels_key: str, seconds: int, format_name: str,
                  preference: str, voice: str, brand: str, cta: str,
                  destination: Path, user_media: list[Path] | None = None,
-                 music: Path | None = None, progress=None) -> tuple[Path, Path]:
+                 music: Path | None = None, progress=None, pixabay_key: str = "",
+                 stock_source: str = "Auto") -> tuple[Path, Path]:
     """Download visual sources and render a complete MP4 with narration and scene captions."""
     plan = validate_plan(plan)
     if format_name not in SIZES:
         raise StudioError("Nieznany format filmu.")
-    if not pexels_key and len(user_media or []) < len(plan["scenes"]):
-        raise StudioError("Wpisz klucz Pexels API albo prześlij własny plik dla każdej sceny.")
+    if not (pexels_key or pixabay_key) and len(user_media or []) < len(plan["scenes"]):
+        raise StudioError("Wpisz klucz Pexels/Pixabay albo prześlij własny plik dla każdej sceny.")
     width, height = SIZES[format_name]
     destination.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="autoclip_"))
@@ -346,11 +384,13 @@ def create_video(plan: dict, *, pexels_key: str, seconds: int, format_name: str,
                          "id": "user:" + str(i + 1), "page": "", "credit": "Własny materiał"}
                 local = source
             else:
-                asset = search_media(scene["search_query"], pexels_key, format_name, preference, seen)
+                asset = search_stock(scene["search_query"], pexels_key, pixabay_key,
+                                     format_name, preference, seen, stock_source)
                 local = work / ("stock_" + str(i) + (".mp4" if asset["kind"] == "video" else ".jpg"))
                 _safe_download(asset["url"], local)
             assets.append({"scene": i + 1, "query": scene["search_query"], "kind": asset["kind"],
                            "credit": asset["credit"], "source_page": asset["page"], "source_id": asset["id"],
+                           "provider": asset.get("provider", "Własny materiał"), "media_type": asset.get("media_type", asset["kind"]),
                            "note": "Materiał ilustracyjny, nie dowód konkretnego zdarzenia."})
             overlay = work / ("overlay_" + str(i) + ".png")
             draw_overlay(overlay, width, height, plan["title"], scene["caption"], brand, cta, i, len(plan["scenes"]))
@@ -390,7 +430,9 @@ def create_video(plan: dict, *, pexels_key: str, seconds: int, format_name: str,
         manifest.write_text(json.dumps({
             "title": plan["title"], "scenes": plan["scenes"], "media": assets,
             "requested_seconds": seconds, "actual_seconds_approx": round(total, 2),
-            "provider": "Pexels (https://www.pexels.com)", "license": "https://www.pexels.com/license/",
+            "providers": ["Pexels", "Pixabay"], "licenses": {
+                "Pexels": "https://www.pexels.com/license/",
+                "Pixabay": "https://pixabay.com/service/license-summary/"},
             "review_before_publication": True,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
         if progress:

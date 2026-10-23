@@ -28,7 +28,7 @@ class StudioError(RuntimeError):
 
 
 def _clean(value: object, limit: int = 1000) -> str:
-    return re.sub(r"\\s+", " ", str(value or "")).strip()[:limit]
+    return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
 
 
 def fallback_plan(prompt: str, language: str, seconds: int, cta: str) -> dict:
@@ -36,7 +36,7 @@ def fallback_plan(prompt: str, language: str, seconds: int, cta: str) -> dict:
     topic = _clean(prompt, 140)
     if not topic:
         raise StudioError("Wpisz temat filmu.")
-    parts = [p.strip() for p in re.split(r"(?<=[.!?])\\s+", _clean(prompt, 2500)) if p.strip()]
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", _clean(prompt, 2500)) if p.strip()]
     if len(parts) < 3:
         if language == "Polski":
             parts = [
@@ -58,7 +58,7 @@ def fallback_plan(prompt: str, language: str, seconds: int, cta: str) -> dict:
             {
                 "voiceover": part,
                 "caption": part[:90],
-                "search_query": re.sub(r"[^\\w\\s-]", "", topic, flags=re.UNICODE)[:90],
+                "search_query": re.sub(r"[^\w\s-]", "", topic, flags=re.UNICODE)[:90],
             }
             for part in parts[:7]
         ],
@@ -257,7 +257,7 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, ma
     if len(lines) > max_lines:
         lines = lines[:max_lines]
         lines[-1] = lines[-1].rstrip(".") + "..."
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def draw_overlay(path: Path, width: int, height: int, title: str, caption: str, brand: str, cta: str, index: int, count: int) -> None:
@@ -367,7 +367,7 @@ def create_video(plan: dict, *, pexels_key: str, seconds: int, format_name: str,
                   "-pix_fmt", "yuv420p", "-r", "30", str(output)])
             segments.append(output)
         concat = work / "clips.txt"
-        concat.write_text("".join("file '" + p.name + "'\\n" for p in segments), encoding="utf-8")
+        concat.write_text("".join("file '" + p.name + "'\n" for p in segments), encoding="utf-8")
         total = sum(timings)
         out = destination / "autoclip.mp4"
         args = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y",

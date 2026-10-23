@@ -28,7 +28,7 @@ class VideoSmokeTest(unittest.TestCase):
             Image.new("RGB", (800, 1200), (42, 89, 115)).save(photo)
             plan = {"title": "Iceland", "scenes": [{"voiceover": "Hello Iceland.", "caption": "Hello Iceland", "search_query": "Iceland"}]}
 
-            def fake_voice(scenes, speech):
+            def fake_voice(scenes, voice, speech):
                 subprocess.run(
                     [_ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
                      "-f", "lavfi", "-i", "sine=frequency=440:duration=1",

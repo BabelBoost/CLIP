@@ -1,0 +1,7 @@
+streamlit>=1.38,<2
+openai>=1.50,<3
+requests>=2.31,<3
+Pillow>=10.3,<13
+edge-tts>=6.1,<9
+mutagen>=1.47,<2
+imageio-ffmpeg>=0.5,<1

@@ -1,0 +1,6 @@
+streamlit>=1.38,<2
+Pillow>=10.0,<13
+requests>=2.31,<3
+beautifulsoup4>=4.12,<5
+pyttsx3>=2.90,<3
+imageio-ffmpeg>=0.5,<1

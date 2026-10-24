@@ -120,7 +120,7 @@ class SceneEditor(tk.Tk):
                      values=("9:16 · TikTok / Reels / Shorts", "16:9 · YouTube", "1:1 · Kwadrat")).pack(side="left", padx=(8, 20))
         ttk.Label(row1, text="Przejście (sek.)").pack(side="left")
         ttk.Spinbox(row1, from_=0, to=1.5, increment=0.05, textvariable=self.transition, width=7).pack(side="left", padx=8)
-        ttk.Label(row1, text="0 = cięcie").pack(side="left", foreground="#666")
+        ttk.Label(row1, text="0 = cięcie", foreground="#666").pack(side="left")
 
         row2 = ttk.Frame(settings)
         row2.pack(fill="x", pady=4)

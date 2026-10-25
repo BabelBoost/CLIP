@@ -13,6 +13,8 @@ Aplikacja transkrybuje film, ocenia fragmenty, renderuje pionowe klipy 9:16 z na
 
 Domyślny format TikTok `@niefiltrowanypl` wybiera fragmenty 20–35 s, w których najmocniejsze zdanie pada na początku. Raport zawiera trzy hooki ekranowe z oznaczeniem najlepszego, klikalne timecode'y dla źródła YouTube, plan cięć, transkrypcję napisów, osobno oznaczony komentarz autora, opis i cztery hashtagi. Jeśli mocnego fragmentu nie ma, aplikacja wyświetla informację zamiast wymuszać wybór.
 
+Analiza i montaż działają jako osobny proces. Możesz odświeżyć stronę albo otworzyć ją ponownie, a stan zadania będzie widoczny pod tym samym adresem. Pliki tymczasowe i wyniki są przechowywane przez 7 dni w folderze tymczasowym systemu.
+
 ## Windows
 
 1. Zainstaluj Python 3.11 lub 3.12.
@@ -20,10 +22,10 @@ Domyślny format TikTok `@niefiltrowanypl` wybiera fragmenty 20–35 s, w który
 3. Uruchom `START_WINDOWS.bat`. Skrypt utworzy środowisko aplikacji i zainstaluje wymagane biblioteki.
 4. Wybierz jedno źródło: publiczny link YouTube albo plik wideo do 1 GB.
 5. Wybierz język, model, próg wyniku i platformy.
-6. Kliknij `ANALIZUJ I UTWÓRZ KLIPY`.
+6. Kliknij `URUCHOM ANALIZĘ I TWORZENIE KLIPÓW`.
 7. Pobierz gotowe MP4 osobno albo całą paczkę ZIP.
 
-Przy pierwszym uruchomieniu transkrypcji Faster-Whisper pobierze wybrany model. Po pobraniu filmu z YouTube aplikacja wybiera gotowy plik wideo z dźwiękiem. Pliki są obrabiane lokalnie.
+Przy pierwszym uruchomieniu transkrypcji Faster-Whisper pobierze wybrany model. Model `tiny` jest najszybszy, a `base` daje lepszy wynik. Po pobraniu filmu z YouTube aplikacja wybiera gotowy plik wideo z dźwiękiem. Pliki są obrabiane lokalnie.
 
 ## Skrót na pulpicie
 

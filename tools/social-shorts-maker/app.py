@@ -50,22 +50,24 @@ with st.sidebar:
     auto_zoom = st.checkbox("Kadruj na mówcę", value=True)
     trim_silence = st.checkbox("Wycinaj dłuższe cisze", value=True)
 
-source_tab, upload_tab = st.tabs(["Wklej link YouTube", "Prześlij plik"])
-
-with source_tab:
+source_kind = st.radio(
+    "Źródło filmu",
+    ["Link YouTube", "Prześlij plik"],
+    horizontal=True,
+)
+youtube_url = ""
+uploaded = None
+if source_kind == "Link YouTube":
     youtube_url = st.text_input("Link do filmu", placeholder="https://www.youtube.com/watch?v=...")
     st.caption("Obsługiwane są publiczne linki YouTube dostępne bez omijania zabezpieczeń.")
-with upload_tab:
+else:
     uploaded = st.file_uploader(
         "Wybierz długi film",
         type=["mp4", "mov", "mkv", "webm", "m4v"],
-        help="Film jest przetwarzany lokalnie na komputerze, na którym działa aplikacja.",
+        help="Maksymalny rozmiar pliku: 1 GB. Film jest przetwarzany lokalnie.",
     )
 
-active_tab = st.session_state.get("_active_tab", 0)
-# Streamlit tabs do not expose their selected state, so a provided upload takes precedence.
-source_kind = "upload" if uploaded is not None else "youtube"
-has_source = uploaded is not None or bool(youtube_url.strip())
+has_source = uploaded is not None if source_kind == "Prześlij plik" else bool(youtube_url.strip())
 
 if not targets:
     st.warning("Wybierz przynajmniej jedną platformę.")
@@ -73,29 +75,40 @@ elif has_source and st.button("ANALIZUJ I UTWÓRZ KLIPY", type="primary", use_co
     work = Path(tempfile.mkdtemp(prefix="babel_social_shorts_"))
     input_path: Path | None = None
     try:
-        if source_kind == "upload":
+        if source_kind == "Prześlij plik":
             input_path = work / Path(uploaded.name).name
-            input_path.write_bytes(uploaded.getbuffer())
+            uploaded.seek(0)
+            with input_path.open("wb") as destination:
+                shutil.copyfileobj(uploaded, destination, length=8 * 1024 * 1024)
         else:
-            input_path = work / "source.mp4"
             options = {
-                "format": "bestvideo*+bestaudio/best",
-                "outtmpl": str(work / "source.%(ext)s"),
+                "format": "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
+                "outtmpl": str(work / "%(id)s.%(ext)s"),
                 "merge_output_format": "mp4",
                 "noplaylist": True,
+                "retries": 3,
+                "fragment_retries": 3,
+                "socket_timeout": 30,
                 "quiet": True,
                 "no_warnings": True,
             }
             with yt_dlp.YoutubeDL(options) as ydl:
-                info = ydl.extract_info(youtube_url.strip(), download=True)
-                downloaded = Path(ydl.prepare_filename(info))
-                if not downloaded.exists():
-                    matches = list(work.glob("source.*"))
-                    if not matches:
-                        raise FileNotFoundError("Nie znaleziono pobranego pliku wideo.")
-                    downloaded = matches[0]
-                if downloaded != input_path:
-                    shutil.copy2(downloaded, input_path)
+                ydl.extract_info(youtube_url.strip(), download=True)
+
+            video_extensions = {".mp4", ".mkv", ".webm", ".mov", ".m4v"}
+            media_files = [
+                path for path in work.iterdir()
+                if path.is_file()
+                and path.suffix.lower() in video_extensions
+                and not path.name.endswith((".part", ".ytdl"))
+            ]
+            extension_priority = {".mp4": 0, ".mkv": 1, ".webm": 2, ".mov": 3, ".m4v": 4}
+            media_files.sort(key=lambda path: (extension_priority[path.suffix.lower()], -path.stat().st_size))
+            if not media_files:
+                raise FileNotFoundError(
+                    "YouTube nie zwrócił gotowego pliku wideo. Spróbuj ponownie albo prześlij plik z komputera."
+                )
+            input_path = media_files[0]
 
         if not input_path.exists():
             raise FileNotFoundError("Nie udało się przygotować pliku źródłowego.")

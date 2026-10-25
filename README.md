@@ -17,12 +17,19 @@ ads/
   babelboost/
 templates/
 tools/
+  social-shorts-maker/
   video-downloader/
   viral-clip-studio/
 archive/
 ```
 
 ## Narzędzia
+
+### Babel Boost Social Shorts Maker
+
+Jedna lokalna aplikacja do tworzenia krótkich klipów z filmu YouTube albo przesłanego pliku. Przygotowuje klipy 9:16 i pliki copy dla TikToka, X, Facebook Reels oraz YouTube Shorts.
+
+Kod i instrukcja: `tools/social-shorts-maker/`
 
 ### Babel Boost Video Downloader 3.2 — Smart Viral Clips
 

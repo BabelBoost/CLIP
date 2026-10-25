@@ -90,6 +90,12 @@ Dla polityki i publicystyki dostępny jest neutralny tryb zachowujący sens oraz
 
 Kod i instrukcja: `tools/viral-clip-studio/`
 
+### TikTok Clip Finder dla @niefiltrowanypl
+
+Osobny ekran do analizy pliku wideo lub linku YouTube. Przygotowuje do pięciu propozycji 20–35 sekund z timecode’ami, cytatem, hookami, planem cięć, napisami, komentarzem, opisem i czterema hashtagami.
+
+Kod i instrukcja: [tools/viral-clip-studio/README_NIEFILTROWANY.md](tools/viral-clip-studio/README_NIEFILTROWANY.md)
+
 ## Zasada pracy
 
 Każdy klip powinien mieć:

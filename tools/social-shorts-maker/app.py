@@ -1,127 +1,56 @@
 from __future__ import annotations
 
+import json
+import os
 import shutil
-import tempfile
-from pathlib import Path
+import subprocess
 import sys
-import re
+import tempfile
+import time
+import uuid
+from pathlib import Path
 
 import streamlit as st
-import yt_dlp
 
-ROOT = Path(__file__).resolve().parents[1]
-VIRAL_STUDIO = ROOT / "viral-clip-studio"
-sys.path.insert(0, str(VIRAL_STUDIO))
+APP_DIR = Path(__file__).resolve().parent
+JOB_ROOT = Path(tempfile.gettempdir()) / "babel_social_shorts_jobs"
+JOB_ROOT.mkdir(parents=True, exist_ok=True)
+WORKER = APP_DIR / "worker.py"
 
-from viralclip import (  # noqa: E402
-    analyze_segments,
-    format_time,
-    package_clips,
-    render_top_clips,
-    transcribe_video,
-    write_top5_copy,
-)
-
-
-def source_time_link(source_url: str | None, seconds: float) -> str:
-    label = format_time(seconds)
-    if not source_url:
-        return label
-    separator = "&" if "?" in source_url else "?"
-    return f"[{label}]({source_url}{separator}t={max(0, int(seconds))}s)"
-
-
-def quote_opens_clip(clip) -> bool:
-    opening = " ".join(
-        item.get("text", "")
-        for item in clip.subtitles
-        if float(item.get("start", 0)) <= 4.0
-    ).lower()
-    quote_words = re.findall(r"[\w’']+", clip.quote.lower(), flags=re.UNICODE)
-    opening_words = re.findall(r"[\w’']+", opening, flags=re.UNICODE)
-    if not quote_words or not opening_words:
-        return False
-    phrase = quote_words[: min(5, len(quote_words))]
-    opening_phrase = " ".join(opening_words)
-    return " ".join(phrase) in opening_phrase
-
-
-def editorial_report(candidates, source_url: str | None) -> str:
-    lines = [
-        "# TikTok @niefiltrowanypl",
-        "",
-        "Fragmenty 20–35 s. Hooki są propozycjami tekstu ekranowego. Cytat oznaczony niżej pochodzi z transkrypcji i wymaga sprawdzenia z odsłuchem.",
-        "",
-    ]
-    for clip in candidates:
-        start_link = source_time_link(source_url, clip.start)
-        end_link = source_time_link(source_url, clip.end)
-        hooks = clip.hook_variants[:3]
-        best = next((item for item in hooks if item.get("text") == clip.hook), None)
-        if best is None and hooks:
-            best = max(hooks, key=lambda item: float(item.get("score", 0)))
-        tags = list(dict.fromkeys(clip.hashtags))[:4]
-        for fallback in ["#niefiltrowanypl", "#polityka", "#publicystyka", "#dyskusja"]:
-            if len(tags) >= 4:
-                break
-            if fallback not in tags:
-                tags.append(fallback)
-        lines.extend([
-            f"## Klip {clip.rank} | Viral Score {clip.viral_score:.0f}/100",
-            "",
-            f"**Początek:** {start_link}  ",
-            f"**Koniec:** {end_link}  ",
-            f"**Długość:** {clip.duration:.1f} s  ",
-            f"**Ocena fragmentu:** {clip.quality_label}",
-            "",
-            "### Hooki na ekran",
-        ])
-        for index, item in enumerate(hooks, start=1):
-            marker = " **NAJLEPSZY**" if item is best else ""
-            text = str(item.get("text", ""))
-            words = text.split()
-            if len(words) > 9:
-                text = " ".join(words[:9]).rstrip(".,;:") + "…"
-            lines.append(f"{index}. {text}{marker}")
-        lines.extend([
-            "",
-            f"**Cytat z transkrypcji:** „{clip.quote}”",
-            "",
-            "### Plan cięć",
-            f"1. Otwórz najmocniejszym zdaniem. Początek źródła: {start_link}. Hook na ekranie przez pierwsze 1–3 s.",
-            "2. Zachowaj wypowiedź w kolejności. Zostaw krótkie wprowadzenie i zdanie, które uzasadnia główną tezę.",
-            f"3. Zakończ przy {end_link}, po pełnej myśli lub naturalnej puencie. Nie dopisuj pytania, jeśli nie wynika z materiału.",
-            "",
-            "### Napisy z transkrypcji",
-        ])
-        for cue in clip.subtitles:
-            absolute_start = clip.start + float(cue.get("start", 0))
-            absolute_end = clip.start + float(cue.get("end", 0))
-            lines.append(f"- {format_time(absolute_start)}–{format_time(absolute_end)}: {cue.get('text', '')}")
-        lines.extend([
-            "",
-            "### Komentarz autora, oddzielony od informacji",
-            "Moim zdaniem warto wysłuchać całej wypowiedzi, zanim ocenimy ten fragment.",
-            "",
-            f"### Opis",
-            clip.tiktok_description,
-            "",
-            f"### Hashtagi",
-            " ".join(tags),
-            "",
-            "Sprawdź timecode, cytat i napisy z oryginalnym nagraniem przed publikacją.",
-            "",
-        ])
-    return "\n".join(lines)
+for old_job in JOB_ROOT.iterdir():
+    try:
+        if old_job.is_dir() and time.time() - old_job.stat().st_mtime > 7 * 24 * 60 * 60:
+            shutil.rmtree(old_job, ignore_errors=True)
+    except OSError:
+        pass
 
 st.set_page_config(page_title="Babel Boost Social Shorts Maker", page_icon="✂️", layout="wide")
 st.title("Babel Boost Social Shorts Maker")
 st.caption("Z długiego filmu do krótkich klipów na TikTok, X, Facebook Reels i YouTube Shorts.")
-
 st.info(
     "Przetwarzaj materiały, które należą do Ciebie albo do których masz zgodę. "
     "Aplikacja nie omija zabezpieczeń ani DRM. Wynik rankingu jest wskazówką, nie obietnicą zasięgu."
 )
+
+
+def read_job(job_id: str) -> tuple[Path, dict] | tuple[None, None]:
+    if not job_id or not all(char in "0123456789abcdef" for char in job_id) or len(job_id) != 32:
+        return None, None
+    folder = JOB_ROOT / job_id
+    state_file = folder / "job.json"
+    if not state_file.is_file():
+        return None, None
+    try:
+        return folder, json.loads(state_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return folder, None
+
+
+def write_job(path: Path, value: dict) -> None:
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(path)
+
 
 with st.sidebar:
     st.header("Ustawienia klipów")
@@ -132,7 +61,7 @@ with st.sidebar:
     niefiltrowany_mode = editorial_format.startswith("TikTok")
     language_label = st.selectbox("Język filmu", ["Automatycznie", "Polski", "English", "Íslenska"])
     language = {"Automatycznie": None, "Polski": "pl", "English": "en", "Íslenska": "is"}[language_label]
-    whisper_model = st.selectbox("Model transkrypcji", ["base", "small", "medium"], index=1)
+    whisper_model = st.selectbox("Model transkrypcji", ["tiny", "base", "small"], index=1)
     content_label = st.selectbox("Rodzaj materiału", ["Ogólny", "Polityka / publicystyka"])
     content_mode = "public_affairs" if niefiltrowany_mode or content_label.startswith("Polityka") else "general"
     clip_count = st.slider("Maksymalna liczba klipów", 1, 5, 5)
@@ -149,225 +78,161 @@ with st.sidebar:
     trim_silence = st.checkbox("Wycinaj dłuższe cisze", value=True)
 
 if niefiltrowany_mode:
-    st.caption("Tryb @niefiltrowanypl szuka samodzielnych fragmentów 20–35 s i zachowuje neutralne, wierne źródłu copy.")
+    st.caption("Tryb @niefiltrowanypl szuka fragmentów 20–35 s, w których główne zdanie pada na początku.")
 
-source_kind = st.radio(
-    "Źródło filmu",
-    ["Link YouTube", "Prześlij plik"],
-    horizontal=True,
-)
+source_kind_label = st.radio("Źródło filmu", ["Link YouTube", "Prześlij plik"], horizontal=True)
 youtube_url = ""
 uploaded = None
-if source_kind == "Link YouTube":
+if source_kind_label == "Link YouTube":
     youtube_url = st.text_input("Link do filmu", placeholder="https://www.youtube.com/watch?v=...")
     st.caption("Obsługiwane są publiczne linki YouTube dostępne bez omijania zabezpieczeń.")
 else:
     uploaded = st.file_uploader(
         "Wybierz długi film",
         type=["mp4", "mov", "mkv", "webm", "m4v"],
-        help="Maksymalny rozmiar pliku: 1 GB. Film jest przetwarzany lokalnie.",
+        help="Maksymalny rozmiar pliku: 1 GB. Film jest obrabiany lokalnie.",
     )
 
-has_source = uploaded is not None if source_kind == "Prześlij plik" else bool(youtube_url.strip())
+has_source = bool(youtube_url.strip()) if source_kind_label == "Link YouTube" else uploaded is not None
 
-if not targets:
-    st.warning("Wybierz przynajmniej jedną platformę.")
-elif has_source and st.button("ANALIZUJ I UTWÓRZ KLIPY", type="primary", use_container_width=True):
-    work = Path(tempfile.mkdtemp(prefix="babel_social_shorts_"))
-    input_path: Path | None = None
-    source_url: str | None = None
+if st.button(
+    "URUCHOM ANALIZĘ I TWORZENIE KLIPÓW",
+    type="primary",
+    use_container_width=True,
+    disabled=(not targets or not has_source),
+):
+    job_id = uuid.uuid4().hex
+    job_dir = JOB_ROOT / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    state = {
+        "job_id": job_id,
+        "status": "queued",
+        "message": "Zadanie czeka na uruchomienie…",
+        "progress": 0,
+        "created_at": __import__("time").time(),
+        "source_kind": "youtube" if source_kind_label == "Link YouTube" else "upload",
+        "youtube_url": youtube_url.strip() if source_kind_label == "Link YouTube" else "",
+        "upload_path": "",
+        "niefiltrowany_mode": niefiltrowany_mode,
+        "language": language,
+        "whisper_model": whisper_model,
+        "content_mode": content_mode,
+        "clip_count": clip_count,
+        "min_score": min_score,
+        "targets": targets,
+        "burn_subtitles": burn_subtitles,
+        "show_hook": show_hook,
+        "dynamic_subtitles": dynamic_subtitles,
+        "auto_zoom": auto_zoom,
+        "trim_silence": trim_silence,
+    }
     try:
-        if source_kind == "Prześlij plik":
-            input_path = work / Path(uploaded.name).name
+        if uploaded is not None and source_kind_label == "Prześlij plik":
+            input_path = job_dir / Path(uploaded.name).name
             uploaded.seek(0)
             with input_path.open("wb") as destination:
                 shutil.copyfileobj(uploaded, destination, length=8 * 1024 * 1024)
-        else:
-            options = {
-                "format": "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
-                "outtmpl": str(work / "%(id)s.%(ext)s"),
-                "merge_output_format": "mp4",
-                "noplaylist": True,
-                "retries": 3,
-                "fragment_retries": 3,
-                "socket_timeout": 30,
-                "quiet": True,
-                "no_warnings": True,
-            }
-            with yt_dlp.YoutubeDL(options) as ydl:
-                info = ydl.extract_info(youtube_url.strip(), download=True)
-            if info.get("id"):
-                source_url = f"https://www.youtube.com/watch?v={info['id']}"
+            state["upload_path"] = str(input_path)
 
-            video_extensions = {".mp4", ".mkv", ".webm", ".mov", ".m4v"}
-            media_files = [
-                path for path in work.iterdir()
-                if path.is_file()
-                and path.suffix.lower() in video_extensions
-                and not path.name.endswith((".part", ".ytdl"))
-            ]
-            extension_priority = {".mp4": 0, ".mkv": 1, ".webm": 2, ".mov": 3, ".m4v": 4}
-            media_files.sort(key=lambda path: (extension_priority[path.suffix.lower()], -path.stat().st_size))
-            if not media_files:
-                raise FileNotFoundError(
-                    "YouTube nie zwrócił gotowego pliku wideo. Spróbuj ponownie albo prześlij plik z komputera."
-                )
-            input_path = media_files[0]
-
-        if not input_path.exists():
-            raise FileNotFoundError("Nie udało się przygotować pliku źródłowego.")
-
-        progress = st.progress(0)
-        status = st.empty()
-
-        def progress_cb(value: float, message: str) -> None:
-            progress.progress(min(35, int(value * 35)))
-            status.write(message)
-
-        status.write("Transkrypcja filmu…")
-        segments, detected = transcribe_video(
-            input_path,
-            model_size=whisper_model,
-            language=language,
-            progress_cb=progress_cb,
-        )
-        progress.progress(40)
-        status.write(f"Analiza fragmentów. Wykryty język: {detected or 'nieznany'}")
-
-        candidates = analyze_segments(
-            segments,
-            top_n=100 if niefiltrowany_mode else clip_count,
-            content_mode=content_mode,
-            min_viral_score=float(min_score),
-            include_weak=False,
-        )
-        if niefiltrowany_mode:
-            candidates = [
-                clip for clip in candidates
-                if 20 <= clip.duration <= 35 and quote_opens_clip(clip)
-            ][:clip_count]
-        if not candidates:
-            if niefiltrowany_mode:
-                st.warning(
-                    "Materiał nie dostarczył wystarczająco mocnego, samodzielnego fragmentu 20–35 s, "
-                    "w którym główne zdanie pada na początku. Nie wymuszam wyboru. Możesz obniżyć próg "
-                    "albo przełączyć format na uniwersalny short."
-                )
-            else:
-                st.warning("Nie znaleziono fragmentów powyżej wybranego progu. Obniż próg i spróbuj ponownie.")
-            st.stop()
-
-        editorial_path = None
-        if niefiltrowany_mode:
-            editorial_path = work / "TikTok_niefiltrowanypl_plan.md"
-            editorial_path.write_text(editorial_report(candidates, source_url), encoding="utf-8")
-
-        output_root = work / "output"
-        rendered = []
-        for index, clip in enumerate(candidates[:clip_count], start=1):
-            status.write(f"Renderowanie klipu {index}/{min(clip_count, len(candidates))}…")
-            rendered.extend(render_top_clips(
-                input_path,
-                [clip],
-                output_root / "clips",
-                count=1,
-                burn_subtitles=burn_subtitles,
-                show_hook=show_hook,
-                dynamic_subtitles=dynamic_subtitles,
-                segments=segments,
-                highlight_words=True,
-                auto_zoom=auto_zoom,
-                trim_silence=trim_silence,
-                silence_threshold=0.8,
-            ))
-            progress.progress(40 + int(index / max(1, min(clip_count, len(candidates))) * 45))
-
-        copy_files = write_top5_copy(candidates[:clip_count], output_root / "copy", count=clip_count)
-        platform_copy = output_root / "platform-copy"
-        platform_copy.mkdir(parents=True, exist_ok=True)
-        extra_files = [] if niefiltrowany_mode else list(copy_files)
-        if editorial_path:
-            extra_files.append(editorial_path)
-        for platform in targets:
-            for index, clip in enumerate(candidates[:clip_count], start=1):
-                source_copy = Path(copy_files[index - 1]) if index <= len(copy_files) else None
-                source_text = source_copy.read_text(encoding="utf-8") if source_copy and source_copy.exists() else ""
-                if niefiltrowany_mode:
-                    source_text = editorial_report([clip], source_url)
-                path = platform_copy / f"clip_{index:02d}_{platform.lower().replace(' ', '-').replace('/', '-')}.txt"
-                path.write_text(
-                    f"PLATFORMA: {platform}\n"
-                    f"KLIP: {index:02d}\n"
-                    f"TIMECODE źródła: {source_time_link(source_url, clip.start)}–{source_time_link(source_url, clip.end)}\n"
-                    f"HOOK: {clip.hook}\n\n"
-                    f"{source_text}\n\n"
-                    "Format wideo: pionowy 9:16, 1080×1920. Sprawdź opis i napisy przed publikacją.\n",
-                    encoding="utf-8",
-                )
-                extra_files.append(path)
-
-        zip_path = package_clips(
-            rendered,
-            output_root / "social_shorts_package.zip",
-            extra_files=extra_files,
-        )
-        st.session_state["shorts_workspace"] = str(work)
-        st.session_state["shorts_rendered"] = [str(path) for path in rendered]
-        st.session_state["shorts_zip"] = str(zip_path)
-        st.session_state["shorts_editorial_report"] = editorial_report(candidates, source_url) if niefiltrowany_mode else ""
-        st.session_state["shorts_candidates"] = [
-            {
-                "rank": clip.rank,
-                "start": format_time(clip.start),
-                "end": format_time(clip.end),
-                "score": round(clip.viral_score),
-                "hook": clip.hook,
-            }
-            for clip in candidates[:clip_count]
-        ]
-        progress.progress(100)
-        status.success("Gotowe. Klipy i teksty platform są w paczce ZIP.")
+        state_path = job_dir / "job.json"
+        write_job(state_path, state)
+        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        with (job_dir / "worker.log").open("ab") as log_file:
+            subprocess.Popen(
+                [sys.executable, str(WORKER), "--job-dir", str(job_dir)],
+                cwd=APP_DIR,
+                stdin=subprocess.DEVNULL,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                creationflags=flags,
+                close_fds=(os.name != "nt"),
+            )
+        st.query_params["job"] = job_id
+        st.rerun()
     except Exception as exc:
-        st.error(f"Nie udało się przetworzyć filmu: {exc}")
-    finally:
-        # Keep successful outputs available for downloads; clean only failed/empty runs.
-        if not st.session_state.get("shorts_zip") or not Path(st.session_state["shorts_zip"]).exists():
-            shutil.rmtree(work, ignore_errors=True)
+        state.update(status="error", message=f"Nie udało się uruchomić zadania: {exc}", progress=100)
+        write_job(job_dir / "job.json", state)
 
-if st.session_state.get("shorts_candidates"):
-    st.subheader("Propozycje klipów")
-    st.dataframe(st.session_state["shorts_candidates"], use_container_width=True, hide_index=True)
-    if st.session_state.get("shorts_editorial_report"):
-        st.markdown(st.session_state["shorts_editorial_report"])
+job_id = st.query_params.get("job", "")
+job_dir, initial_state = read_job(job_id) if job_id else (None, None)
+if job_id and job_dir is None:
+    st.warning("Nie znaleziono zadania. Uruchom analizę ponownie.")
+
+def show_completed(job_id: str, job_dir: Path, state: dict) -> None:
+    st.success("Gotowe. Wynik został zapisany.")
+    rows = state.get("candidates", [])
+    if rows:
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    report_path = Path(state["report_path"]) if state.get("report_path") else None
+    if report_path and report_path.is_file():
+        report = report_path.read_text(encoding="utf-8")
+        st.markdown(report)
         st.download_button(
             "Pobierz plan TikToka @niefiltrowanypl",
-            st.session_state["shorts_editorial_report"].encode("utf-8"),
-            file_name="TikTok_niefiltrowanypl_plan.md",
+            report.encode("utf-8"),
+            file_name=report_path.name,
             mime="text/markdown",
-            key="niefiltrowany-plan-download",
+            key=f"report-{job_id}",
         )
-    for index, value in enumerate(st.session_state.get("shorts_rendered", []), start=1):
-        path = Path(value)
-        if path.exists():
+    for index, value in enumerate(state.get("rendered_files", []), start=1):
+        video_path = Path(value)
+        if video_path.is_file():
             st.markdown(f"**Klip {index}**")
-            st.video(str(path))
+            st.video(str(video_path))
             st.download_button(
                 f"Pobierz klip {index}",
-                path.read_bytes(),
-                file_name=path.name,
+                video_path.read_bytes(),
+                file_name=video_path.name,
                 mime="video/mp4",
-                key=f"social-clip-{index}",
+                key=f"clip-{job_id}-{index}",
                 use_container_width=True,
             )
-    zip_value = st.session_state.get("shorts_zip")
-    if zip_value and Path(zip_value).exists():
+    zip_path = Path(state["zip_path"]) if state.get("zip_path") else None
+    if zip_path and zip_path.is_file():
         st.download_button(
-            "POBIERZ PACZKĘ KLIPÓW I OPISÓW",
-            Path(zip_value).read_bytes(),
-            file_name="social_shorts_package.zip",
+            "POBIERZ PACZKĘ KLIPÓW",
+            zip_path.read_bytes(),
+            file_name=zip_path.name,
             mime="application/zip",
             type="primary",
+            key=f"zip-{job_id}",
             use_container_width=True,
         )
 
-st.caption("Wszystkie klipy są renderowane pionowo 9:16. Każdy portal ma własny plik copy do sprawdzenia przed publikacją.")
+
+if job_dir is not None and initial_state:
+    st.divider()
+    st.subheader("Postęp zadania")
+    job_status = initial_state.get("status")
+    if job_status in {"queued", "running"}:
+        @st.fragment(run_every="2s")
+        def show_job_progress():
+            _, current = read_job(job_id)
+            if not current:
+                st.error("Nie można odczytać stanu zadania.")
+                return
+            if current.get("status") not in {"queued", "running"}:
+                st.rerun(scope="app")
+                return
+            st.write(current.get("message", "Przetwarzanie…"))
+            st.progress(int(current.get("progress", 0)) / 100)
+            st.caption("Zadanie działa osobno. Możesz odświeżyć stronę lub wrócić później.")
+
+        show_job_progress()
+    elif job_status == "no_clips":
+        st.warning(initial_state.get("message", "Nie znaleziono odpowiedniego fragmentu."))
+    elif job_status == "error":
+        st.error(f"Przetwarzanie przerwane: {initial_state.get('message', 'Nieznany błąd')}")
+        log_path = job_dir / "worker.log"
+        if log_path.exists():
+            try:
+                tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+                if tail.strip():
+                    with st.expander("Szczegóły błędu"):
+                        st.code(tail)
+            except OSError:
+                pass
+    elif job_status == "complete":
+        show_completed(job_id, job_dir, initial_state)
+
+st.caption("Przetwarzanie działa osobno. Postęp i gotowe pliki są zachowywane, gdy strona zostanie odświeżona.")

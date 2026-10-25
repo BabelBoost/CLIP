@@ -11,6 +11,8 @@ Obsługiwane platformy:
 
 Aplikacja transkrybuje film, ocenia fragmenty, renderuje pionowe klipy 9:16 z napisami i przygotowuje pliki copy dla wybranych platform. Przesyłanie plików jest ustawione na maksymalnie 1 GB.
 
+Domyślny format TikTok `@niefiltrowanypl` wybiera fragmenty 20–35 s, w których najmocniejsze zdanie pada na początku. Raport zawiera trzy hooki ekranowe z oznaczeniem najlepszego, klikalne timecode'y dla źródła YouTube, plan cięć, transkrypcję napisów, osobno oznaczony komentarz autora, opis i cztery hashtagi. Jeśli mocnego fragmentu nie ma, aplikacja wyświetla informację zamiast wymuszać wybór.
+
 ## Windows
 
 1. Zainstaluj Python 3.11 lub 3.12.

@@ -56,7 +56,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Label,Arial,51,&H0000D7FF,&H0000D7FF,&H00000000,&H60000000,-1,0,0,0,100,100,0,0,1,2,0,8,85,85,260,1
-Style: Body,52,&H00FFFFFF,&H00FFFFFF,&H00000000,&H60000000,-1,0,0,0,100,100,0,0,1,2,0,5,90,90,0,1
+Style: Body,Arial,52,&H00FFFFFF,&H00FFFFFF,&H00000000,&H60000000,-1,0,0,0,100,100,0,0,1,2,0,5,90,90,0,1
 Style: Footer,Arial,36,&H00DDDDDD,&H00DDDDDD,&H00000000,&H60000000,0,0,0,0,100,100,0,0,1,1,0,2,90,90,225,1
 
 [Events]

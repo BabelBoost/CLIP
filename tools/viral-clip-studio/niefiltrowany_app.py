@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from urllib.parse import urlsplit
 from dataclasses import replace
 from pathlib import Path
 
@@ -44,6 +45,11 @@ def quote_start(clip, segments) -> float | None:
 
 
 def download_youtube(url: str, folder: Path) -> Path:
+    parsed = urlsplit(url.strip())
+    if parsed.scheme != "https" or (parsed.hostname or "").lower() not in {
+        "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtu.be",
+    }:
+        raise ValueError("Wklej bezpośredni link HTTPS z YouTube lub youtu.be.")
     try:
         import yt_dlp
     except ImportError as exc:
@@ -254,7 +260,7 @@ if results:
     )
     use_tts = st.checkbox(
         "Generuj polski głos lektora na planszy komentarza (wymaga internetu)",
-        value=False,
+        value=True,
         help="Używa Edge TTS. Bez tej opcji komentarz jest pokazany tekstem na końcowej planszy.",
     )
     permission = st.checkbox(

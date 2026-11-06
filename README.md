@@ -90,6 +90,12 @@ Dla polityki i publicystyki dostępny jest neutralny tryb zachowujący sens oraz
 
 Kod i instrukcja: `tools/viral-clip-studio/`
 
+### TikTok Clip Finder dla @niefiltrowanypl
+
+Panel do analizy filmu lub dozwolonego linku YouTube. Wybiera fragmenty 20–35 sekund, generuje gotowe pionowe MP4 z polskimi napisami, dodaje oddzielną planszę komentarza z opcjonalnym lektorem PL oraz przygotowuje ZIP z materiałami. Każdy film wymaga ręcznej kontroli przed publikacją.
+
+Kod i instrukcja: [tools/viral-clip-studio/README_NIEFILTROWANY.md](tools/viral-clip-studio/README_NIEFILTROWANY.md)
+
 ## Zasada pracy
 
 Każdy klip powinien mieć:

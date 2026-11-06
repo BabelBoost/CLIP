@@ -46,7 +46,7 @@ def _time_ass(seconds: float) -> str:
 
 def write_commentary_ass(path: Path, commentary: str, duration: float) -> None:
     chunks = textwrap.wrap(safe_caption(commentary), width=30, break_long_words=False)
-    message = r"\N".join(ass_escape(chunk) for chunk in chunks[:9])
+    message = r"\N".join(ass_escape(chunk) for chunk in chunks)
     header = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -56,7 +56,7 @@ WrapStyle: 2
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Label,Arial,51,&H0000D7FF,&H0000D7FF,&H00000000,&H60000000,-1,0,0,0,100,100,0,0,1,2,0,8,85,85,260,1
-Style: Body,Arial,62,&H00FFFFFF,&H00FFFFFF,&H00000000,&H60000000,-1,0,0,0,100,100,0,0,1,2,0,5,90,90,0,1
+Style: Body,52,&H00FFFFFF,&H00FFFFFF,&H00000000,&H60000000,-1,0,0,0,100,100,0,0,1,2,0,5,90,90,0,1
 Style: Footer,Arial,36,&H00DDDDDD,&H00DDDDDD,&H00000000,&H60000000,0,0,0,0,100,100,0,0,1,1,0,2,90,90,225,1
 
 [Events]
@@ -105,7 +105,10 @@ def make_commentary_card(folder: Path, comment: str, use_tts: bool) -> Path:
             raise RuntimeError(
                 "Nie udało się wygenerować lektora online. Sprawdź internet albo wyłącz lektora AI."
             ) from exc
-        duration = min(30.0, max(5.0, _probe_duration(speech_path) + 0.9))
+        voice_length = _probe_duration(speech_path)
+        if voice_length > 29.0:
+            raise ValueError("Lektor trwa ponad 29 sekund. Skróć komentarz.")
+        duration = max(5.0, voice_length + 0.9)
     else:
         duration = 7.0
     write_commentary_ass(folder / "commentary.ass", comment, duration)

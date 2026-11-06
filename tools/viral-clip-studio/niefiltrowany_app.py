@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -8,6 +9,8 @@ import streamlit as st
 
 from viralclip import analyze_segments, format_time, transcribe_video
 from viralclip.evaluator import evaluate_candidates
+from viralclip.models import ClipCandidate, TranscriptSegment
+from niefiltrowany_export import make_clip, make_zip
 
 
 st.set_page_config(page_title="Niefiltrowany | TikTok Clip Finder", layout="wide")
@@ -122,6 +125,7 @@ def analyze(video_path: Path, workspace: Path) -> None:
     ]
     st.session_state["niefiltrowany_segments"] = [s.to_dict() for s in segments]
     st.session_state["niefiltrowany_source"] = str(video_path)
+    st.session_state["niefiltrowany_workspace"] = str(workspace)
     st.session_state["niefiltrowany_duration"] = len(segments)
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     progress.progress(100)
@@ -129,6 +133,9 @@ def analyze(video_path: Path, workspace: Path) -> None:
 
 
 if submitted:
+    st.session_state.pop("niefiltrowany_results", None)
+    st.session_state.pop("niefiltrowany_renders", None)
+    st.session_state.pop("niefiltrowany_zip", None)
     if source_mode == "Plik wideo" and uploaded is None:
         st.error("Dodaj plik wideo.")
     elif source_mode == "Link YouTube" and not youtube_url.strip():
@@ -142,6 +149,7 @@ if submitted:
                 video_path.write_bytes(uploaded.getbuffer())
             else:
                 video_path = download_youtube(youtube_url.strip(), workspace)
+            st.session_state["niefiltrowany_origin_url"] = youtube_url.strip() if source_mode == "Link YouTube" else ""
             st.video(str(video_path))
             analyze(video_path, workspace)
         except Exception as exc:
@@ -213,3 +221,97 @@ if results:
                 mime="text/plain",
                 key=f"niefiltrowany-download-{result['rank']}",
             )
+
+
+if results:
+    st.divider()
+    st.header("AUTO MONTAŻ: gotowe MP4 9:16")
+    st.caption(
+        "Program zachowuje kolejność i oryginalny dźwięk wypowiedzi. "
+        "Nie usuwa automatycznie pauz. Komentarz pojawia się na osobnej planszy. "
+        "Weryfikacja faktów, praw i kontekstu należy do redaktora."
+    )
+    chosen = st.multiselect(
+        "Które fragmenty wyrenderować?",
+        options=[item["rank"] for item in results],
+        default=[item["rank"] for item in results[:3]],
+        format_func=lambda v: f"Klip {v}",
+    )
+    hook_text = st.text_input(
+        "Hook redakcyjny (na początku filmu)",
+        value="Co wynika z tej wypowiedzi?",
+        max_chars=85,
+    )
+    commentary_text = st.text_area(
+        "Komentarz na końcowej planszy, ten sam dla wybranych klipów",
+        value="Co sądzisz o tej wypowiedzi? Sprawdź pełne nagranie i napisz swoją opinię.",
+        max_chars=320,
+    )
+    origin_url = st.text_input(
+        "Link do oryginalnego nagrania (trafi do opisu)",
+        value=st.session_state.get("niefiltrowany_origin_url", ""),
+        placeholder="https://www.youtube.com/watch?v=...",
+    )
+    use_tts = st.checkbox(
+        "Generuj polski głos lektora na planszy komentarza (wymaga internetu)",
+        value=False,
+        help="Używa Edge TTS. Bez tej opcji komentarz jest pokazany tekstem na końcowej planszy.",
+    )
+    permission = st.checkbox(
+        "Mam prawo użyć nagrania. Sprawdzę wypowiedź, podpisy i cały kontekst przed publikacją.",
+        value=False,
+    )
+    if st.button(
+        "GENERUJ MP4 + POLSKIE NAPISY + ZIP",
+        type="primary",
+        use_container_width=True,
+        disabled=not (permission and chosen and commentary_text.strip()),
+    ):
+        try:
+            source = Path(st.session_state["niefiltrowany_source"])
+            root = Path(st.session_state["niefiltrowany_workspace"]) / "niefiltrowany_output"
+            root.mkdir(exist_ok=True)
+            segments = [TranscriptSegment(**item) for item in st.session_state["niefiltrowany_segments"]]
+            created = []
+            displayed = []
+            progress = st.progress(0)
+            for index, rank in enumerate(chosen, start=1):
+                item = next(r for r in results if r["rank"] == rank)
+                candidate = replace(ClipCandidate(**item["clip"]), rank=int(rank))
+                video, srt, copy = make_clip(
+                    source, candidate, segments, root,
+                    hook=hook_text, comment=commentary_text,
+                    source_url=origin_url, use_tts=use_tts,
+                )
+                created.extend([video, srt, copy])
+                displayed.append(str(video))
+                progress.progress(int(100 * index / len(chosen)))
+            package = make_zip(created, root / "niefiltrowany_autoclip.zip")
+            st.session_state["niefiltrowany_renders"] = displayed
+            st.session_state["niefiltrowany_zip"] = str(package)
+            st.success("Wygenerowano MP4, napisy SRT i opisy. Obejrzyj każdy film przed publikacją.")
+        except Exception as exc:
+            st.error(f"Nie udało się przygotować filmów: {exc}")
+
+rendered_paths = st.session_state.get("niefiltrowany_renders", [])
+if rendered_paths:
+    st.subheader("Podgląd gotowych filmów")
+    for path_value in rendered_paths:
+        final_video = Path(path_value)
+        if final_video.is_file():
+            st.video(str(final_video))
+            st.download_button(
+                f"Pobierz {final_video.name}",
+                final_video.read_bytes(),
+                file_name=final_video.name, mime="video/mp4",
+                key=f"download-{final_video.name}",
+            )
+    package_path = Path(st.session_state.get("niefiltrowany_zip", ""))
+    if package_path.is_file():
+        st.download_button(
+            "POBIERZ WSZYSTKIE KLIPY I NAPISY ZIP",
+            package_path.read_bytes(),
+            file_name=package_path.name,
+            mime="application/zip",
+            type="primary", use_container_width=True,
+        )

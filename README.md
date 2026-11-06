@@ -20,6 +20,7 @@ tools/
   social-shorts-maker/
   video-downloader/
   viral-clip-studio/
+  video-compressor/
 archive/
 ```
 
@@ -89,6 +90,23 @@ Generuje:
 Dla polityki i publicystyki dostępny jest neutralny tryb zachowujący sens oraz kontekst wypowiedzi.
 
 Kod i instrukcja: `tools/viral-clip-studio/`
+
+### Babel Boost Video Compressor
+
+Prosta aplikacja okienkowa do zmniejszania rozmiaru plików wideo na Windows.
+
+Obsługuje:
+
+- MP4, MOV, MKV, AVI, WEBM i M4V
+- gotowy profil TikTok / Reels / YouTube Shorts 1080p
+- tryb wysokiej jakości H.264
+- tryby H.265 do mocniejszej kompresji
+- opcjonalny docelowy rozmiar pliku w MB
+- pasek postępu
+- porównanie rozmiaru przed i po kompresji
+- lokalne przetwarzanie przez FFmpeg
+
+Kod i instrukcja: `tools/video-compressor/`
 
 ## Zasada pracy
 

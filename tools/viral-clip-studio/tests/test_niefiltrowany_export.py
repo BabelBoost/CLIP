@@ -37,3 +37,9 @@ def test_zip_contains_clips_with_no_absolute_paths(tmp_path: Path):
     with ZipFile(target) as z:
         assert z.namelist() == ["clip_01/sample.txt"]
         assert z.read("clip_01/sample.txt") == b"test"
+
+
+def test_app_syntax_is_valid():
+    import ast
+    app_path = Path(__file__).resolve().parents[1] / "niefiltrowany_app.py"
+    ast.parse(app_path.read_text(encoding="utf-8"))

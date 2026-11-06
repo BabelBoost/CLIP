@@ -85,7 +85,7 @@ Kod i instrukcja: `tools/viral-clip-studio/`
 
 ### TikTok Clip Finder dla @niefiltrowanypl
 
-Osobny ekran do analizy pliku wideo lub linku YouTube. Przygotowuje do pięciu propozycji 20–35 sekund z timecode’ami, cytatem, hookami, planem cięć, napisami, komentarzem, opisem i czterema hashtagami.
+Panel do analizy filmu lub dozwolonego linku YouTube. Wybiera fragmenty 20–35 sekund, generuje gotowe pionowe MP4 z polskimi napisami, dodaje oddzielną planszę komentarza z opcjonalnym lektorem PL oraz przygotowuje ZIP z materiałami. Każdy film wymaga ręcznej kontroli przed publikacją.
 
 Kod i instrukcja: [tools/viral-clip-studio/README_NIEFILTROWANY.md](tools/viral-clip-studio/README_NIEFILTROWANY.md)
 
